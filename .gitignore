@@ -80,3 +80,9 @@ ui-debug.log
 
 # dataconnect generated files
 .dataconnect
+
+# Object file
+*.o
+
+# Ada Library Information
+*.ali
