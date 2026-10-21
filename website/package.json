@@ -1,0 +1,53 @@
+{
+  "name": "kitari-studio-website",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:e2e": "playwright test",
+    "test:e2e:emulator": "cross-env E2E_PORT=3101 NEXT_PUBLIC_FIREBASE_USE_EMULATORS=true NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 firebase emulators:exec --project kitaristudios --config ../firebase.json --only auth,firestore \"npm run prepare-admin-test && npm run test:e2e\"",
+    "test:rules": "vitest run --config vitest.config.mts",
+    "test:rules:emulator": "firebase emulators:exec --project kitaristudios --config ../firebase.json --only firestore \"npm run test:rules\"",
+    "seed": "tsx scripts/seed.ts",
+    "seed:production": "tsx scripts/seed-production.ts",
+    "set-admin": "tsx scripts/set-admin.ts",
+    "set-admin:production": "tsx scripts/set-admin-production.ts",
+    "create-admin:production": "tsx scripts/create-admin-production.ts",
+    "prepare-admin-test": "tsx scripts/prepare-admin-test.ts",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\" \"scripts/**/*.ts\" \"*.{ts,tsx,mts,mjs,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\" \"scripts/**/*.ts\" \"*.{ts,tsx,mts,mjs,json}\"",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase": "^12.0.0",
+    "gsap": "^3.15.0",
+    "lenis": "^1.3.27",
+    "next": "16.4.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "firebase-admin": "^14.5.0",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}

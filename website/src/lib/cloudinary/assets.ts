@@ -1,0 +1,69 @@
+const cloudinaryAssets = {
+  "amiyarosa.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478471/kitari-studio/site-assets/amiyarosa-bb28746a4f.webp",
+  "amiya-rosa.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478471/kitari-studio/site-assets/amiyarosa-bb28746a4f.webp",
+  "bg-cta.jpg":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478472/kitari-studio/site-assets/bg-cta-bbf5c412f9.webp",
+  "contractormanajement.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478474/kitari-studio/site-assets/contractormanajement-515c2b1d56.webp",
+  "contractor-management.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478474/kitari-studio/site-assets/contractormanajement-515c2b1d56.webp",
+  "rectangle-25.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478475/kitari-studio/site-assets/rectangle-25-4b3150769e.webp",
+  "rectangle-25.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478475/kitari-studio/site-assets/rectangle-25-4b3150769e.webp",
+  "rectangle-26.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478476/kitari-studio/site-assets/rectangle-26-84f011a446.webp",
+  "rectangle-26.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478476/kitari-studio/site-assets/rectangle-26-84f011a446.webp",
+  "rectangle-27.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478477/kitari-studio/site-assets/rectangle-27-f582d47b93.webp",
+  "rectangle-27.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478477/kitari-studio/site-assets/rectangle-27-f582d47b93.webp",
+  "rectangle-28.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478477/kitari-studio/site-assets/rectangle-28-dfdad7c8bd.webp",
+  "rectangle-28.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478477/kitari-studio/site-assets/rectangle-28-dfdad7c8bd.webp",
+  "rectangle-29.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478478/kitari-studio/site-assets/rectangle-29-30243024f4.webp",
+  "rectangle-29.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478478/kitari-studio/site-assets/rectangle-29-30243024f4.webp",
+  "rectangle-30.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478478/kitari-studio/site-assets/rectangle-30-692892b806.webp",
+  "rectangle-30.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478478/kitari-studio/site-assets/rectangle-30-692892b806.webp",
+  "rectangle-31.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478479/kitari-studio/site-assets/rectangle-31-0dc8e3a0f8.webp",
+  "rectangle-31.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478479/kitari-studio/site-assets/rectangle-31-0dc8e3a0f8.webp",
+  "rectangle-32.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478480/kitari-studio/site-assets/rectangle-32-9936a233ce.webp",
+  "rectangle-32.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478480/kitari-studio/site-assets/rectangle-32-9936a233ce.webp",
+  "rectangle-33.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478481/kitari-studio/site-assets/rectangle-33-6b81f17f3d.webp",
+  "rectangle-50.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478481/kitari-studio/site-assets/rectangle-50-09c4086139.webp",
+  "rectangle-51.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478482/kitari-studio/site-assets/rectangle-51-208752de3c.webp",
+  "rectangle-52.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478483/kitari-studio/site-assets/rectangle-52-e9f73ce38a.webp",
+  "shaistanayacity.png":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478484/kitari-studio/site-assets/shaistanayacity-c0cae0e6be.webp",
+  "shaistanaya-city.webp":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478484/kitari-studio/site-assets/shaistanayacity-c0cae0e6be.webp",
+  "testimonial-1.jpg":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478485/kitari-studio/site-assets/testimonial-1-335ce1c351.webp",
+  "testimonial-2.jpg":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478486/kitari-studio/site-assets/testimonial-2-54b3419fd9.webp",
+  "testimonial-3.jpg":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478486/kitari-studio/site-assets/testimonial-3-2610aa00d9.webp",
+  "testimonial-4.jpg":
+    "https://res.cloudinary.com/dpfh30b2v/image/upload/v1792478487/kitari-studio/site-assets/testimonial-4-da0484768c.webp",
+} as const;
+
+export function cloudinaryImage(source: string) {
+  const assetName = source.split(/[\\/]/).at(-1) ?? source;
+  return cloudinaryAssets[assetName as keyof typeof cloudinaryAssets] ?? source;
+}

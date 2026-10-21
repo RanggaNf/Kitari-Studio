@@ -1,0 +1,75 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.admin == true
+        && request.auth.token.email_verified == true;
+    }
+
+    function isShortString(value, maximum) {
+      return value is string && value.size() > 0 && value.size() <= maximum;
+    }
+
+    function validLead() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['name', 'email', 'projectType', 'message', 'status', 'createdAt'])
+        && data.keys().hasOnly(['name', 'email', 'projectType', 'message', 'status', 'createdAt'])
+        && isShortString(data.name, 120)
+        && data.email is string
+        && data.email.size() <= 254
+        && data.email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')
+        && isShortString(data.projectType, 80)
+        && isShortString(data.message, 4000)
+        && data.status == 'New'
+        && data.createdAt == request.time;
+    }
+
+    function validNewsletter(subscriberId) {
+      let data = request.resource.data;
+      return data.keys().hasAll(['email', 'createdAt'])
+        && data.keys().hasOnly(['email', 'createdAt'])
+        && data.email is string
+        && data.email.size() <= 254
+        && data.email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')
+        && data.createdAt == request.time
+        && subscriberId.matches('^[a-f0-9]{64}$');
+    }
+
+    match /leads/{leadId} {
+      allow create: if validLead();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /newsletter/{subscriberId} {
+      allow create: if validNewsletter(subscriberId);
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /siteSettings/{settingsId} {
+      allow get: if isAdmin() || (
+        settingsId == 'main'
+        && resource != null
+        && resource.data.keys().hasAll(['title', 'location'])
+      );
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /{collection}/{documentId} {
+      allow get, list: if collection in [
+        'catalogue',
+        'services',
+        'projects',
+        'testimonials',
+        'faqs'
+      ] && (isAdmin() || resource.data.status == 'Published');
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
