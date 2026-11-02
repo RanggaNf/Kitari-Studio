@@ -36,7 +36,7 @@ export const collectionFields: Record<
   Array<{
     name: string;
     label: string;
-    type?: "textarea" | "image" | "tags" | "gallery" | "checkbox" | "select";
+    type?: "textarea" | "url" | "image" | "tags" | "gallery" | "checkbox" | "select";
     optional?: boolean;
     maxItems?: number;
     aspectRatio?: number;
@@ -70,7 +70,8 @@ export const collectionFields: Record<
       optional: true,
       maxItems: 3,
     },
-    { name: "websiteUrl", label: "Live project URL", optional: true },
+    { name: "websiteUrl", label: "Live project URL", type: "url", optional: true },
+    { name: "prototypeUrl", label: "Prototype URL", type: "url", optional: true },
     { name: "featured", label: "Feature on homepage", type: "checkbox" },
     {
       name: "stage",
@@ -235,3 +236,28 @@ export async function saveSettings(value: DocumentData) {
     merge: true,
   });
 }
+
+export interface AnalyticsData {
+  connected?: boolean;
+  propertyId?: string;
+  activeVisitors?: number;
+  pageViews?: number;
+  avgEngagement?: string;
+  pages?: Array<{
+    path: string;
+    visitors: number;
+    pageViews: number;
+    avgEngagement: string;
+  }>;
+  countries?: Array<{
+    country: string;
+    users: number;
+  }>;
+  updatedAt?: string;
+}
+
+export async function loadAnalyticsData(): Promise<AnalyticsData | null> {
+  const result = await getDoc(doc(getFirebaseDb(), "siteSettings", "analytics"));
+  return result.exists() ? (result.data() as AnalyticsData) : null;
+}
+

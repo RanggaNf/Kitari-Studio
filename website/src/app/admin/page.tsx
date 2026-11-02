@@ -24,6 +24,8 @@ import {
   listPublishedContentCounts,
   listSubscribers,
   loadSettings,
+  loadAnalyticsData,
+  type AnalyticsData,
   managedCollections,
   removeContent,
   saveContent,
@@ -462,6 +464,7 @@ export default function AdminPage() {
   const [overviewError, setOverviewError] = useState("");
   const [overviewLoaded, setOverviewLoaded] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
 
   useEffect(() => {
     if (!session.loading && (!session.user || !session.isAdmin)) {
@@ -528,6 +531,9 @@ export default function AdminPage() {
         setDashboard(buildDashboard(leads, prospects));
         setOverviewLoaded(true);
         setRecords([]);
+      } else if (section === "analytics") {
+        const data = await loadAnalyticsData();
+        setAnalyticsData(data);
       }
     } catch (reason) {
       if (section === "overview") setOverviewError(formatError(reason));
@@ -1134,26 +1140,67 @@ export default function AdminPage() {
                 <span className="admin-analytics-period">Last 28 days</span>
               </div>
               <div className="admin-analytics-connection" role="status">
-                <span aria-hidden="true">i</span>
+                <span
+                  aria-hidden="true"
+                  style={
+                    analyticsData?.connected
+                      ? { background: "#10b981", color: "#fff" }
+                      : undefined
+                  }
+                >
+                  {analyticsData?.connected ? "✓" : "i"}
+                </span>
                 <div>
-                  <strong>Secure GA4 reporting connection needed</strong>
+                  <strong>
+                    {analyticsData?.connected
+                      ? "GA4 Realtime Reporting Connected"
+                      : "Secure GA4 reporting connection needed"}
+                  </strong>
                   <p>
-                    The GA4 tracking tag and this dashboard are separate. Connect the
-                    Analytics Data API through a secure server backend to load real report
-                    data here.
+                    {analyticsData?.connected
+                      ? `Terkoneksi ke properti ID ${analyticsData.propertyId ?? "559450385"}. Terakhir disinkronkan: ${analyticsData.updatedAt ? new Date(analyticsData.updatedAt).toLocaleString("id-ID") : "Baru saja"}.`
+                      : "The GA4 tracking tag and this dashboard are separate. Connect the Analytics Data API through a secure server backend to load real report data here."}
                   </p>
                 </div>
-                <span className="admin-analytics-status">Setup required</span>
+                <span
+                  className="admin-analytics-status"
+                  style={
+                    analyticsData?.connected
+                      ? {
+                          borderColor: "rgba(16, 185, 129, 0.4)",
+                          color: "#10b981",
+                        }
+                      : undefined
+                  }
+                >
+                  {analyticsData?.connected ? "Connected" : "Setup required"}
+                </span>
               </div>
               <div className="admin-analytics-stats">
                 {[
-                  ["Active visitors", "—", "GA4 active users"],
-                  ["Page views", "—", "Views across all pages"],
-                  ["Avg. engagement", "—", "Per active visitor"],
+                  [
+                    "Active visitors",
+                    analyticsData?.activeVisitors !== undefined
+                      ? String(analyticsData.activeVisitors)
+                      : "—",
+                    "GA4 active users",
+                  ],
+                  [
+                    "Page views",
+                    analyticsData?.pageViews !== undefined
+                      ? String(analyticsData.pageViews)
+                      : "—",
+                    "Views across all pages",
+                  ],
+                  [
+                    "Avg. engagement",
+                    analyticsData?.avgEngagement ?? "—",
+                    "Per active visitor",
+                  ],
                 ].map(([label, value, note]) => (
                   <article className="admin-kpi" key={label}>
                     <p>{label}</p>
-                    <strong aria-label={`${label}: unavailable`}>{value}</strong>
+                    <strong aria-label={`${label}: ${value}`}>{value}</strong>
                     <small>{note}</small>
                   </article>
                 ))}
@@ -1185,13 +1232,117 @@ export default function AdminPage() {
                         <th>Avg. engagement</th>
                       </tr>
                     </thead>
+                    {analyticsData?.pages && analyticsData.pages.length > 0 && (
+                      <tbody>
+                        {analyticsData.pages.map((p) => {
+                          const maxViews = Math.max(
+                            ...analyticsData.pages!.map((x) => x.pageViews),
+                            1,
+                          );
+                          const ratio = Math.min(1, p.pageViews / maxViews);
+                          return (
+                            <tr key={p.path}>
+                              <td>
+                                <code>{p.path}</code>
+                              </td>
+                              <td>{p.visitors}</td>
+                              <td>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <span>{p.pageViews}</span>
+                                  <div
+                                    style={{
+                                      width: `${Math.max(14, Math.round(ratio * 72))}px`,
+                                      height: "6px",
+                                      borderRadius: "99px",
+                                      background:
+                                        "linear-gradient(90deg, #2a8bf2, #47c1ff)",
+                                    }}
+                                  />
+                                </div>
+                              </td>
+                              <td>{p.avgEngagement}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    )}
                   </table>
-                  <p className="admin-analytics-empty">
-                    Page-level heatmap will appear when secure GA4 report access is
-                    connected.
-                  </p>
+                  {(!analyticsData?.pages || analyticsData.pages.length === 0) && (
+                    <p className="admin-analytics-empty">
+                      Page-level heatmap will appear when secure GA4 report access is
+                      connected.
+                    </p>
+                  )}
                 </div>
               </div>
+
+              {analyticsData?.countries && analyticsData.countries.length > 0 && (
+                <div className="admin-panel" style={{ marginTop: "24px" }}>
+                  <div className="admin-panel-heading">
+                    <div>
+                      <h2>Top Visitors by Country</h2>
+                      <p>Active users by country across the last 28 days.</p>
+                    </div>
+                  </div>
+                  <div className="admin-table-wrap">
+                    <table className="admin-table admin-analytics-table">
+                      <thead>
+                        <tr>
+                          <th>Country</th>
+                          <th>Active Users</th>
+                          <th>Share</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analyticsData.countries.map((c) => {
+                          const totalUsers = analyticsData.countries!.reduce(
+                            (acc, curr) => acc + curr.users,
+                            0,
+                          );
+                          const pct =
+                            totalUsers > 0
+                              ? Math.round((c.users / totalUsers) * 100)
+                              : 0;
+                          return (
+                            <tr key={c.country}>
+                              <td>
+                                <strong>{c.country}</strong>
+                              </td>
+                              <td>{c.users}</td>
+                              <td>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                  }}
+                                >
+                                  <span>{pct}%</span>
+                                  <div
+                                    style={{
+                                      width: `${Math.max(10, Math.round((pct / 100) * 80))}px`,
+                                      height: "6px",
+                                      borderRadius: "99px",
+                                      background:
+                                        "linear-gradient(90deg, #10b981, #34d399)",
+                                    }}
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
