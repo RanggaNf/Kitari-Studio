@@ -14,10 +14,10 @@ import {
   CloudinaryImageField,
   CloudinaryImageGalleryField,
 } from "@/components/admin/cloudinary-image-field";
+import { ProspectManager } from "@/components/admin/prospect-manager";
 import { fallbackContent } from "@/data/homepage-fallback";
 import {
   collectionFields,
-  collectionLabels,
   deleteSubscriber,
   listContent,
   listLeads,
@@ -33,6 +33,18 @@ import {
   type ManagedRecord,
 } from "@/lib/firebase/admin-data";
 import { signOutAdmin, useAdminSession } from "@/lib/firebase/admin-session";
+import {
+  listBusinessProspects,
+  type SavedBusinessProspect,
+} from "@/lib/firebase/prospect-data";
+import { Icon, StatusPill, type IconName } from "./admin-ui";
+import {
+  OverviewDashboard,
+  emptyDashboard,
+  type DashboardData,
+  type DashboardTarget,
+} from "./overview-dashboard";
+import { useAdminTheme } from "./use-admin-theme";
 import { SiteSettingsSchema } from "@/lib/data/schemas";
 import { slugifyProjectTitle } from "@/lib/data/projects";
 
@@ -42,26 +54,37 @@ type Section =
   | ManagedCollection
   | "leads"
   | "newsletter"
+  | "prospects"
   | "about"
   | "homepage"
   | "appearance"
   | "settings";
 type ContentStatusFilter = "all" | "published" | "draft";
 
-const navItems: Array<{ id: Section; label: string; group: string }> = [
-  { id: "overview", label: "Overview", group: "Workspace" },
-  { id: "analytics", label: "Analytics", group: "Workspace" },
-  { id: "about", label: "About section", group: "Content" },
-  { id: "homepage", label: "Homepage text", group: "Content" },
-  { id: "appearance", label: "Appearance", group: "Workspace" },
-  { id: "projects", label: "Our work", group: "Content" },
-  { id: "catalogue", label: "Catalogue", group: "Content" },
-  { id: "services", label: "Services", group: "Content" },
-  { id: "testimonials", label: "Testimonials", group: "Content" },
-  { id: "faqs", label: "FAQs", group: "Content" },
-  { id: "leads", label: "Leads", group: "Inbox" },
-  { id: "newsletter", label: "Newsletter", group: "Inbox" },
-  { id: "settings", label: "Site settings", group: "Workspace" },
+type LeadStatusFilter = "all" | "New" | "Contacted" | "Won";
+type SelectOptions = {
+  leadFilter?: LeadStatusFilter;
+  contentFilter?: ContentStatusFilter;
+  search?: string;
+  lead?: ManagedRecord;
+  prospectId?: string;
+};
+
+const navItems: Array<{ id: Section; label: string; group: string; icon: IconName }> = [
+  { id: "overview", label: "Overview", group: "Workspace", icon: "overview" },
+  { id: "analytics", label: "Analytics", group: "Workspace", icon: "analytics" },
+  { id: "leads", label: "Leads", group: "Inbox", icon: "leads" },
+  { id: "newsletter", label: "Newsletter", group: "Inbox", icon: "newsletter" },
+  { id: "projects", label: "Our work", group: "Content", icon: "work" },
+  { id: "services", label: "Services", group: "Content", icon: "services" },
+  { id: "catalogue", label: "Catalogue", group: "Content", icon: "catalogue" },
+  { id: "testimonials", label: "Testimonials", group: "Content", icon: "testimonials" },
+  { id: "faqs", label: "FAQs", group: "Content", icon: "faqs" },
+  { id: "homepage", label: "Homepage", group: "Website", icon: "homepage" },
+  { id: "about", label: "About", group: "Website", icon: "about" },
+  { id: "settings", label: "Studio & contact", group: "Website", icon: "studio" },
+  { id: "appearance", label: "Appearance", group: "Website", icon: "appearance" },
+  { id: "prospects", label: "Prospects", group: "Prospects", icon: "prospects" },
 ];
 
 const settingFields: Array<{
@@ -204,7 +227,6 @@ const homepageTextFields: Array<{
   { name: "homeFaqTitle", label: "FAQ — Main heading" },
   { name: "homeFaqDescription", label: "FAQ — Description", type: "textarea" },
   { name: "homeCtaHeading", label: "Contact CTA — Heading", type: "textarea" },
-  { name: "homeCtaWorkLink", label: "Contact CTA — Work link" },
   {
     name: "homeFooterDescription",
     label: "Footer — Studio description",
@@ -265,8 +287,13 @@ const homepageTextGroupHeadings: Record<number, string> = {
   21: "Testimonials",
   23: "Frequently asked questions",
   26: "Contact call to action",
-  28: "Footer",
-  57: "Moving hero cards",
+  27: "Footer",
+  56: "Moving hero cards",
+};
+const websiteSettingGroupHeadings: Record<number, string> = {
+  0: "Studio identity",
+  2: "Contact details",
+  6: "Social channels",
 };
 
 function text(value: unknown) {
@@ -287,7 +314,9 @@ function timeValue(value: unknown) {
 }
 
 function csvCell(value: unknown) {
-  return `"${text(value).replaceAll('"', '""')}"`;
+  const valueText = text(value);
+  const safeText = /^[\s\uFEFF]*[=+\-@]/u.test(valueText) ? `'${valueText}` : valueText;
+  return `"${safeText.replaceAll('"', '""')}"`;
 }
 
 function downloadCsv(filename: string, rows: ManagedRecord[]) {
@@ -317,10 +346,75 @@ function formatError(error: unknown) {
     : "Something went wrong. Please try again.";
 }
 
+function buildDashboard(
+  leads: ManagedRecord[],
+  prospects: SavedBusinessProspect[],
+): DashboardData {
+  const now = new Date();
+  const buckets = Array.from({ length: 6 }, (_, index) => {
+    const start = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    return {
+      start: start.getTime(),
+      end: end.getTime(),
+      label: start.toLocaleDateString("id-ID", { month: "short" }),
+    };
+  });
+  const enquiries = buckets.map(() => 0);
+  const followUps = buckets.map(() => 0);
+  for (const lead of leads) {
+    const time = timeValue(lead.createdAt);
+    const index = buckets.findIndex(
+      (bucket) => time >= bucket.start && time < bucket.end,
+    );
+    if (index < 0) continue;
+    enquiries[index] += 1;
+    // A lead counts as followed up once it is Contacted or Won.
+    if (lead.status === "Contacted" || lead.status === "Won") followUps[index] += 1;
+  }
+  const open = prospects.filter((prospect) => !prospect.contacted);
+  return {
+    months: buckets.map((bucket) => bucket.label),
+    enquiries,
+    followUps,
+    uncontacted: open.slice(0, 2).map((prospect) => ({
+      id: prospect.id,
+      name: prospect.name,
+      city: prospect.city,
+      country: prospect.country,
+      locationId: prospect.locationId,
+      contacted: prospect.contacted,
+      channel: prospect.email ? "Email" : prospect.phone ? "WhatsApp" : "Manual",
+    })),
+    uncontactedTotal: open.length,
+    recentLeads: [...leads]
+      .sort((first, second) => timeValue(second.createdAt) - timeValue(first.createdAt))
+      .slice(0, 3),
+  };
+}
+
+function sectionLead(section: Section) {
+  if (section === "overview") return "Kelola dan pantau studio Anda";
+  if (section === "analytics") return "Status koneksi GA4 dan performa halaman.";
+  if (section === "leads") return "Balas enquiry dan perbarui statusnya.";
+  if (section === "newsletter") return "Subscriber dari form publik.";
+  if (section === "prospects")
+    return "Pilih kota untuk melanjutkan follow-up atau mengimpor bisnis baru.";
+  if (
+    section === "homepage" ||
+    section === "about" ||
+    section === "settings" ||
+    section === "appearance"
+  )
+    return "Perubahan di sini langsung tampil di website publik setelah dipublikasikan.";
+  return "Item Published tampil di website. Draft hanya terlihat admin.";
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const session = useAdminSession();
   const [section, setSection] = useState<Section>("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [records, setRecords] = useState<ManagedRecord[]>([]);
   const [counts, setCounts] = useState<
     Record<ManagedCollection, { total: number; published: number }>
@@ -332,6 +426,12 @@ export default function AdminPage() {
     faqs: { total: 0, published: 0 },
   });
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settingsSnapshot, setSettingsSnapshot] = useState("");
+  const [settingsReviewOpen, setSettingsReviewOpen] = useState(false);
+  const [pendingSettings, setPendingSettings] = useState<Record<
+    string,
+    string | number
+  > | null>(null);
   const [overviewStats, setOverviewStats] = useState({
     leads: 0,
     newLeads: 0,
@@ -345,12 +445,23 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [contentStatusFilter, setContentStatusFilter] =
     useState<ContentStatusFilter>("all");
+  const [leadStatusFilter, setLeadStatusFilter] = useState<LeadStatusFilter>("all");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [editor, setEditor] = useState<ManagedRecord | null>(null);
+  const [editorSnapshot, setEditorSnapshot] = useState("");
   const [leadDetails, setLeadDetails] = useState<ManagedRecord | null>(null);
+  const [selectedProspectId, setSelectedProspectId] = useState("");
+  const { theme, toggleTheme } = useAdminTheme();
+  const [taskFilter, setTaskFilter] = useState<"all" | "action">("all");
+  const [tasksOpen, setTasksOpen] = useState(true);
+  const [chartIndex, setChartIndex] = useState<number | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
+  const [overviewError, setOverviewError] = useState("");
+  const [overviewLoaded, setOverviewLoaded] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
 
   useEffect(() => {
     if (!session.loading && (!session.user || !session.isAdmin)) {
@@ -362,6 +473,7 @@ export default function AdminPage() {
     if (!session.isAdmin) return;
     setLoading(true);
     setError("");
+    if (section === "overview") setOverviewError("");
     try {
       if (managedCollections.some((collection) => collection === section)) {
         setRecords(await listContent(section as ManagedCollection, search));
@@ -384,22 +496,23 @@ export default function AdminPage() {
               : section === "appearance"
                 ? appearanceFields
                 : settingFields;
-        setSettings(
-          Object.fromEntries(
-            fields.map(({ name }) => [
-              name,
-              text(
-                value[name] ??
-                  fallbackContent.settings[name as keyof typeof fallbackContent.settings],
-              ),
-            ]),
-          ),
+        const nextSettings = Object.fromEntries(
+          fields.map(({ name }) => [
+            name,
+            text(
+              value[name] ??
+                fallbackContent.settings[name as keyof typeof fallbackContent.settings],
+            ),
+          ]),
         );
+        setSettings(nextSettings);
+        setSettingsSnapshot(JSON.stringify(nextSettings));
       } else if (section === "overview") {
-        const [nextCounts, leads, subscribers] = await Promise.all([
+        const [nextCounts, leads, subscribers, prospects] = await Promise.all([
           listPublishedContentCounts(),
           listLeads(),
           listSubscribers(),
+          listBusinessProspects(),
         ]);
         setCounts(nextCounts);
         setOverviewStats({
@@ -412,19 +525,12 @@ export default function AdminPage() {
           Contacted: leads.filter((lead) => lead.status === "Contacted").length,
           Won: leads.filter((lead) => lead.status === "Won").length,
         });
-        const activity: ManagedRecord[] = [
-          ...leads.slice(0, 6).map((lead) => ({ ...lead, recordType: "Lead" })),
-          ...subscribers.slice(0, 4).map((item) => ({
-            ...item,
-            recordType: "Subscriber",
-          })),
-        ];
-        activity.sort(
-          (first, second) => timeValue(second.createdAt) - timeValue(first.createdAt),
-        );
-        setRecords(activity);
+        setDashboard(buildDashboard(leads, prospects));
+        setOverviewLoaded(true);
+        setRecords([]);
       }
     } catch (reason) {
+      if (section === "overview") setOverviewError(formatError(reason));
       setError(formatError(reason));
     } finally {
       setLoading(false);
@@ -435,19 +541,87 @@ export default function AdminPage() {
     void Promise.resolve().then(loadSection);
   }, [loadSection]);
 
+  const hasUnsavedSettings =
+    settingsSnapshot !== "" && settingsSnapshot !== JSON.stringify(settings);
+
+  useEffect(() => {
+    if (!hasUnsavedSettings) return;
+    function warnBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedSettings]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
+
   const title = useMemo(
     () => navItems.find((item) => item.id === section)?.label ?? "Admin",
     [section],
   );
+  const currentGroup = navItems.find((item) => item.id === section)?.group ?? "Workspace";
 
-  function selectSection(next: Section) {
+  function selectSection(next: Section, options: SelectOptions = {}) {
+    if (
+      editor &&
+      editorSnapshot !== JSON.stringify(editor) &&
+      !window.confirm("Discard your unsaved changes and leave this editor?")
+    ) {
+      return;
+    }
+    if (
+      hasUnsavedSettings &&
+      !window.confirm("Discard website changes that have not been published?")
+    ) {
+      return;
+    }
     setSection(next);
-    setSearch("");
-    setContentStatusFilter("all");
+    setMenuOpen(false);
+    setSearch(options.search ?? "");
+    setContentStatusFilter(options.contentFilter ?? "all");
+    setLeadStatusFilter(options.leadFilter ?? "all");
     setEditor(null);
-    setLeadDetails(null);
+    setEditorSnapshot("");
+    setLeadDetails(options.lead ?? null);
+    setSelectedProspectId(options.prospectId ?? "");
+    setSettings({});
+    setSettingsSnapshot("");
+    setSettingsReviewOpen(false);
     setNotice("");
     setError("");
+  }
+
+  function startEditor(record: ManagedRecord) {
+    setEditor(record);
+    setEditorSnapshot(JSON.stringify(record));
+    setError("");
+    setNotice("");
+  }
+
+  function closeEditor() {
+    if (
+      editor &&
+      editorSnapshot !== JSON.stringify(editor) &&
+      !window.confirm("Discard your unsaved changes?")
+    ) {
+      return;
+    }
+    setEditor(null);
+    setEditorSnapshot("");
   }
 
   async function handleLogout() {
@@ -486,11 +660,15 @@ export default function AdminPage() {
   }
 
   if (session.loading || (!session.isAdmin && !session.error)) {
-    return <main className="admin-loading">Verifying administrator access…</main>;
+    return (
+      <main className="admin-loading" data-theme={theme}>
+        Verifying administrator access…
+      </main>
+    );
   }
   if (session.error) {
     return (
-      <main className="admin-loading">
+      <main className="admin-loading" data-theme={theme}>
         <p className="admin-alert admin-alert-error">{session.error}</p>
         <button className="admin-button" onClick={() => router.replace("/admin/login")}>
           Return to sign in
@@ -523,6 +701,22 @@ export default function AdminPage() {
   const appearanceBodyScale = Number(settings.siteBodyScale || 1);
   const appearanceNavScale = Number(settings.siteNavScale || 1);
   const appearanceButtonScale = Number(settings.siteButtonScale || 1);
+  const activeSettingsFields =
+    section === "about"
+      ? aboutFields
+      : section === "homepage"
+        ? homepageFields
+        : section === "appearance"
+          ? appearanceFields
+          : settingFields;
+  const savedSettings = settingsSnapshot
+    ? (JSON.parse(settingsSnapshot) as Record<string, string>)
+    : {};
+  const settingsChanges = activeSettingsFields.flatMap((field) => {
+    const previous = savedSettings[field.name] ?? "";
+    const current = settings[field.name] ?? "";
+    return previous === current ? [] : [{ field, previous, current }];
+  });
 
   async function saveEditor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -575,6 +769,7 @@ export default function AdminPage() {
     try {
       await saveContent(section as ManagedCollection, editor?.id ?? null, values);
       setEditor(null);
+      setEditorSnapshot("");
       setNotice("Content saved successfully.");
       await loadSection();
     } catch (reason) {
@@ -584,63 +779,76 @@ export default function AdminPage() {
     }
   }
 
-  async function saveSiteSettings(event: FormEvent<HTMLFormElement>) {
+  function reviewSiteSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const fields =
-      section === "about"
-        ? aboutFields
-        : section === "homepage"
-          ? homepageFields
-          : section === "appearance"
-            ? appearanceFields
-            : settingFields;
     const value = Object.fromEntries(
-      fields.map(({ name, type }) => {
+      activeSettingsFields.map(({ name, type }) => {
         const raw = String(formData.get(name) ?? "").trim();
         return [name, type === "number" ? Number(raw) : raw];
       }),
     );
-    let currentValue: Record<string, unknown>;
-    try {
-      currentValue = await loadSettings();
-    } catch (reason) {
-      setError(formatError(reason));
-      return;
-    }
     const parsed = SiteSettingsSchema.safeParse({
       ...fallbackContent.settings,
-      ...currentValue,
+      ...settings,
       ...value,
     });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Check the settings and try again.");
       return;
     }
+    setPendingSettings(value);
+    setSettingsReviewOpen(true);
+    setError("");
+  }
+
+  async function publishSiteSettings() {
+    if (!pendingSettings) return;
     setSaving(true);
     setError("");
     try {
+      const currentValue = await loadSettings();
+      const parsed = SiteSettingsSchema.safeParse({
+        ...fallbackContent.settings,
+        ...currentValue,
+        ...pendingSettings,
+      });
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? "Check the settings and try again.");
+        return;
+      }
       await saveSettings(parsed.data);
-      setSettings((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          Object.entries(value).map(([key, item]) => [key, String(item)]),
-        ),
-      }));
+      const publishedValues = Object.fromEntries(
+        activeSettingsFields.map(({ name }) => [name, text(pendingSettings[name])]),
+      );
+      const nextSettings = {
+        ...settings,
+        ...publishedValues,
+      };
+      setSettings(nextSettings);
+      setSettingsSnapshot(JSON.stringify(nextSettings));
+      setSettingsReviewOpen(false);
+      setPendingSettings(null);
       setNotice(
         section === "about"
-          ? "About section saved successfully."
+          ? "About section published successfully."
           : section === "homepage"
-            ? "Homepage text and hero cards saved successfully."
+            ? "Homepage changes published successfully."
             : section === "appearance"
-              ? "Appearance settings saved successfully."
-              : "Site settings saved successfully.",
+              ? "Appearance changes published successfully."
+              : "Studio and contact changes published successfully.",
       );
     } catch (reason) {
       setError(formatError(reason));
     } finally {
       setSaving(false);
     }
+  }
+
+  function resetSiteSettings() {
+    setSettings(savedSettings);
+    setError("");
+    setNotice("");
   }
 
   async function changeLeadStatus(lead: ManagedRecord, status: string) {
@@ -659,334 +867,661 @@ export default function AdminPage() {
   }
 
   const groupNames = [...new Set(navItems.map((item) => item.group))];
+  const draftCount = Object.values(counts).reduce(
+    (total, count) => total + count.total - count.published,
+    0,
+  );
+  const activeSettingsSection =
+    section === "settings" ||
+    section === "about" ||
+    section === "homepage" ||
+    section === "appearance";
+  const visibleLeads =
+    section === "leads" && leadStatusFilter !== "all"
+      ? records.filter((lead) => lead.status === leadStatusFilter)
+      : records;
+  const leadStatusCounts = {
+    all: records.length,
+    New: records.filter((lead) => lead.status === "New").length,
+    Contacted: records.filter((lead) => lead.status === "Contacted").length,
+    Won: records.filter((lead) => lead.status === "Won").length,
+  };
+
+  const headingTitle = section === "overview" ? "Admin Dashboard" : title;
+
+  function openDashboardTarget(target: DashboardTarget) {
+    if (target.contentFilter === "draft" && target.section === "projects") {
+      selectSection("projects", { contentFilter: "draft" });
+      return;
+    }
+    selectSection(target.section, {
+      leadFilter: target.leadFilter,
+      contentFilter: target.contentFilter,
+      lead: target.lead,
+      prospectId: target.prospectId,
+    });
+  }
+
+  function searchLeadsFromHeading() {
+    selectSection("leads", { search: globalSearch.trim() });
+    setGlobalSearch("");
+  }
+
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  // Pending-work counters shown next to sidebar items.
+  const itemBadges: Partial<Record<Section, number>> = {
+    leads: overviewStats.newLeads,
+    prospects: dashboard.uncontactedTotal,
+  };
+  for (const collection of Object.keys(counts) as ManagedCollection[]) {
+    itemBadges[collection] = counts[collection].total - counts[collection].published;
+  }
 
   return (
-    <div className="admin-shell">
-      <aside className="admin-sidebar">
-        <Link href="/" className="admin-brand">
-          KITARI STUDIO<span>ADMIN</span>
-        </Link>
-        <nav aria-label="Admin navigation">
+    <div
+      className="admin-shell"
+      data-menu-open={menuOpen}
+      data-theme={theme}
+    >
+      <a className="admin-skip-link" href="#admin-main">
+        Skip to main content
+      </a>
+      <aside aria-label="Admin navigation" className="admin-sidebar" id="admin-sidebar">
+        <div className="admin-sidebar-brand">
+          <Link href="/" className="admin-brand" aria-label="Kitari Studio — open website">
+            <span aria-hidden="true" className="admin-brand-mark">
+              K
+            </span>
+            <span className="admin-brand-text">Kitari Studio</span>
+          </Link>
+          <button
+            aria-label="Close menu"
+            className="admin-icon-button admin-sidebar-close"
+            onClick={() => setMenuOpen(false)}
+            type="button"
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+
+        <nav aria-label="Admin pages" className="admin-sidebar-nav">
           {groupNames.map((group) => (
             <div className="admin-nav-group" key={group}>
-              <p>{group}</p>
-              {navItems
-                .filter((item) => item.group === group)
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    className={
-                      section === item.id ? "admin-nav-link active" : "admin-nav-link"
-                    }
-                    onClick={() => selectSection(item.id)}
-                  >
-                    <span aria-hidden="true">{navIcon(item.id)}</span>
-                    {item.label}
-                  </button>
-                ))}
+              <p className="admin-nav-label">{group}</p>
+              <ul aria-label={group} className="admin-nav-list">
+                {navItems
+                  .filter((item) => item.group === group)
+                  .map((item) => {
+                    const badge = itemBadges[item.id] ?? 0;
+                    return (
+                      <li key={item.id}>
+                        <button
+                          aria-current={section === item.id ? "page" : undefined}
+                          className="admin-nav-item"
+                          onClick={() => selectSection(item.id)}
+                          title={item.label}
+                          type="button"
+                        >
+                          <Icon name={item.icon} size={19} />
+                          <span className="admin-nav-text">{item.label}</span>
+                          {badge > 0 ? (
+                            <span aria-label={`${badge} pending`} className="admin-nav-badge">
+                              {badge > 99 ? "99+" : badge}
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+              </ul>
             </div>
           ))}
         </nav>
-        <div className="admin-sidebar-bottom">
-          <span className="admin-avatar">
-            {(session.user?.email ?? "A")[0].toUpperCase()}
-          </span>
-          <span className="admin-user-email">{session.user?.email}</span>
-          <button className="admin-logout" onClick={handleLogout} aria-label="Sign out">
-            ↗
+
+        <div className="admin-sidebar-footer">
+          <div className="admin-user">
+            <span className="admin-avatar" aria-hidden="true">
+              KS
+            </span>
+            <span className="admin-user-meta">
+              <strong>Kitari Studio</strong>
+              <small>{session.user?.email}</small>
+            </span>
+          </div>
+          <button
+            aria-label="Sign out"
+            className="admin-icon-button"
+            onClick={handleLogout}
+            title="Sign out"
+            type="button"
+          >
+            <Icon name="logout" size={18} />
           </button>
         </div>
       </aside>
+      <div
+        aria-hidden="true"
+        className="admin-sidebar-scrim"
+        onClick={() => setMenuOpen(false)}
+      />
 
-      <main className="admin-main">
+      <div className="admin-app">
         <header className="admin-topbar">
-          <div>
-            <p className="admin-eyebrow">KITARI STUDIO / ADMIN</p>
-            <h1>{title}</h1>
-          </div>
+          <button
+            aria-controls="admin-sidebar"
+            aria-expanded={menuOpen}
+            aria-label="Open menu"
+            className="admin-icon-button admin-menu-button"
+            onClick={() => setMenuOpen(true)}
+            type="button"
+          >
+            <Icon name="menu" size={20} />
+          </button>
+          <nav aria-label="Breadcrumb" className="admin-breadcrumb">
+            <span>{currentGroup}</span>
+            <span aria-hidden="true">/</span>
+            <strong aria-current="page">{title}</strong>
+          </nav>
           <div className="admin-topbar-actions">
-            <a
-              className="admin-button admin-button-quiet"
-              href="/"
-              target="_blank"
-              rel="noreferrer"
+            <button
+              aria-label={`Open new leads${overviewStats.newLeads ? ` (${overviewStats.newLeads})` : ""}`}
+              className="admin-icon-button"
+              onClick={() => selectSection("leads", { leadFilter: "New" })}
+              title="New leads"
+              type="button"
             >
-              View website ↗
+              <Icon name="leads" size={20} />
+              {overviewStats.newLeads > 0 ? <i className="admin-notification-dot" /> : null}
+            </button>
+            <button
+              aria-label={`Open drafts${draftCount ? ` (${draftCount})` : ""}`}
+              className="admin-icon-button"
+              onClick={() => selectSection("projects", { contentFilter: "draft" })}
+              title="Drafts"
+              type="button"
+            >
+              <Icon name="bell" size={20} />
+              {draftCount > 0 ? <i className="admin-notification-dot" /> : null}
+            </button>
+            <a
+              aria-label="View website (opens in a new tab)"
+              className="admin-icon-button"
+              href="/"
+              rel="noreferrer"
+              target="_blank"
+              title="View website"
+            >
+              <Icon name="globe" size={20} />
             </a>
             <button
-              className="admin-button admin-button-quiet admin-mobile-logout"
-              onClick={handleLogout}
+              aria-label={`Switch to ${nextTheme} mode`}
+              className="admin-icon-button"
+              onClick={toggleTheme}
+              title={`${nextTheme === "dark" ? "Dark" : "Light"} mode`}
+              type="button"
             >
-              Sign out
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={20} />
             </button>
           </div>
         </header>
 
-        {error && (
-          <div role="alert" className="admin-alert admin-alert-error">
-            {error}
+        <main className="admin-main" id="admin-main" tabIndex={-1}>
+          <div className="admin-heading">
+            <div className="admin-heading-copy">
+              <h1>{headingTitle}</h1>
+              <p className="admin-lead">{sectionLead(section)}</p>
+            </div>
+            {section === "overview" && (
+              <div className="admin-heading-actions">
+                <label className="admin-global-search">
+                  <Icon name="search" size={26} />
+                  <input
+                    aria-label="Cari lead"
+                    onChange={(event) => setGlobalSearch(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        searchLeadsFromHeading();
+                      }
+                    }}
+                    placeholder="Cari lead, lalu tekan Enter"
+                    value={globalSearch}
+                  />
+                </label>
+              </div>
+            )}
           </div>
-        )}
-        {notice && (
-          <div role="status" className="admin-alert admin-alert-success">
-            {notice}
-          </div>
-        )}
 
-        {section === "overview" && (
-          <section className="admin-page-content admin-overview-content">
-            <p className="admin-subtitle">
-              A clear picture of your content and incoming enquiries.
-            </p>
-            <div className="admin-kpi-grid">
-              <Kpi
-                label="New leads"
-                value={overviewStats.newLeads}
-                note={`${overviewStats.leads} total enquiries`}
-              />
-              <Kpi
-                label="Published content"
-                value={Object.values(counts).reduce(
-                  (sum, item) => sum + item.published,
-                  0,
-                )}
-                note="Across all content sections"
-              />
-              <Kpi
-                label="Draft content"
-                value={Object.values(counts).reduce(
-                  (sum, item) => sum + item.total - item.published,
-                  0,
-                )}
-                note="Hidden from the public site"
-              />
-              <Kpi
-                label="Subscribers"
-                value={overviewStats.subscribers}
-                note="Total newsletter records"
-              />
+          {error && (
+            <div role="alert" className="admin-alert admin-alert-error">
+              {error}
             </div>
-            <nav aria-label="Quick admin actions" className="admin-quick-actions">
-              <button onClick={() => selectSection("projects")} type="button">
-                <span aria-hidden="true">↗</span>
-                <span>
-                  <strong>Manage projects</strong>
-                  <small>Update portfolio content</small>
-                </span>
+          )}
+          {notice && (
+            <div role="status" className="admin-toast">
+              <span>{notice}</span>
+              <button onClick={() => setNotice("")} type="button">
+                Tutup
               </button>
-              <button onClick={() => selectSection("about")} type="button">
-                <span aria-hidden="true">◉</span>
-                <span>
-                  <strong>Edit About section</strong>
-                  <small>Change images and studio details</small>
-                </span>
-              </button>
-              <button onClick={() => selectSection("leads")} type="button">
-                <span aria-hidden="true">↘</span>
-                <span>
-                  <strong>Review enquiries</strong>
-                  <small>{overviewStats.newLeads} new leads to review</small>
-                </span>
-              </button>
-            </nav>
-            <div className="admin-overview-grid">
-              <div className="admin-panel">
-                <div className="admin-panel-heading">
-                  <div>
-                    <h2>Lead pipeline</h2>
-                    <p>Current enquiry status across all leads</p>
-                  </div>
-                  <span>{overviewStats.leads} total</span>
-                </div>
-                <div className="admin-pipeline">
-                  {(["New", "Contacted", "Won"] as const).map((status) => {
-                    const count = leadPipeline[status];
-                    const width = overviewStats.leads
-                      ? Math.max((count / overviewStats.leads) * 100, count ? 4 : 0)
-                      : 0;
-                    return (
-                      <div className="admin-pipeline-item" key={status}>
-                        <div>
-                          <StatusPill status={status} />
-                          <strong>{count}</strong>
-                        </div>
-                        <div className={`admin-pipeline-track ${status.toLowerCase()}`}>
-                          <i style={{ width: `${width}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="admin-panel admin-overview-panel">
-                <div className="admin-panel-heading">
-                  <div>
-                    <h2>Content health</h2>
-                    <p>Published and draft items by section</p>
-                  </div>
-                </div>
-                <div className="admin-health-list">
-                  {managedCollections.map((collection) => {
-                    const value = counts[collection];
-                    const ratio = value.total ? (value.published / value.total) * 100 : 0;
-                    return (
-                      <div className="admin-health-row" key={collection}>
-                        <span>{collectionLabels[collection]}</span>
-                        <div className="admin-progress">
-                          <i style={{ width: `${ratio}%` }} />
-                        </div>
-                        <small>
-                          {value.published}/{value.total} published
-                        </small>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="admin-analytics-note">
-                  GA4 report access is not connected yet. Visitor and page-duration
-                  metrics need a secure Analytics Data API connection.
-                </div>
-              </div>
             </div>
-            <div className="admin-panel admin-activity-panel">
-              <div className="admin-panel-heading">
-                <div>
-                  <h2>Recent activity</h2>
-                  <p>Latest enquiries and newsletter sign-ups</p>
-                </div>
-                <button
-                  className="admin-text-button"
-                  onClick={() => selectSection("leads")}
-                >
-                  View leads →
-                </button>
-              </div>
-              {loading ? (
-                <Loading />
-              ) : records.length === 0 ? (
-                <Empty />
-              ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Name / email</th>
-                        <th>Date</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {records.map((row) => (
-                        <tr key={`${row.recordType}-${row.id}`}>
-                          <td>{text(row.recordType)}</td>
-                          <td>{text(row.name || row.email)}</td>
-                          <td>{text(row.createdAt) || "—"}</td>
-                          <td>
-                            <StatusPill status={text(row.status || "Subscribed")} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
+          )}
 
-        {section === "analytics" && (
-          <section className="admin-page-content admin-analytics-page">
-            <div className="admin-analytics-intro">
-              <p className="admin-subtitle">
-                Understand visits and discover which pages attract the most attention.
-              </p>
-              <span className="admin-analytics-period">Last 28 days</span>
-            </div>
-            <div className="admin-analytics-connection" role="status">
-              <span aria-hidden="true">i</span>
-              <div>
-                <strong>Secure GA4 reporting connection needed</strong>
-                <p>
-                  The GA4 tracking tag and this dashboard are separate. Connect the
-                  Analytics Data API through a secure server backend to load real report
-                  data here.
+          {section === "overview" && (
+            <OverviewDashboard
+              chartIndex={chartIndex}
+              counts={counts}
+              data={dashboard}
+              loading={loading || !overviewLoaded}
+              failed={Boolean(overviewError)}
+              onRetry={() => void loadSection()}
+              onChartIndex={setChartIndex}
+              onNavigate={openDashboardTarget}
+              onTaskFilter={setTaskFilter}
+              onToggleTasks={() => setTasksOpen((open) => !open)}
+              pipeline={leadPipeline}
+              stats={overviewStats}
+              taskFilter={taskFilter}
+              tasksOpen={tasksOpen}
+            />
+          )}
+
+          {section === "analytics" && (
+            <section className="admin-page-content admin-analytics-page">
+              <div className="admin-analytics-intro">
+                <p className="admin-subtitle">
+                  Understand visits and discover which pages attract the most attention.
                 </p>
+                <span className="admin-analytics-period">Last 28 days</span>
               </div>
-              <span className="admin-analytics-status">Setup required</span>
-            </div>
-            <div className="admin-analytics-stats">
-              {[
-                ["Active visitors", "—", "GA4 active users"],
-                ["Page views", "—", "Views across all pages"],
-                ["Avg. engagement", "—", "Per active visitor"],
-              ].map(([label, value, note]) => (
-                <article className="admin-kpi" key={label}>
-                  <p>{label}</p>
-                  <strong aria-label={`${label}: unavailable`}>{value}</strong>
-                  <small>{note}</small>
-                </article>
-              ))}
-            </div>
-            <div className="admin-panel admin-page-heatmap">
-              <div className="admin-panel-heading">
+              <div className="admin-analytics-connection" role="status">
+                <span aria-hidden="true">i</span>
                 <div>
-                  <h2>Page popularity heatmap</h2>
+                  <strong>Secure GA4 reporting connection needed</strong>
                   <p>
-                    Compare visitors, page views, and average engagement time by page.
+                    The GA4 tracking tag and this dashboard are separate. Connect the
+                    Analytics Data API through a secure server backend to load real report
+                    data here.
                   </p>
                 </div>
-                <div
-                  aria-label="Page view intensity: low to high"
-                  className="admin-heatmap-legend"
-                >
-                  <span>Low</span>
-                  <i />
-                  <span>High</span>
+                <span className="admin-analytics-status">Setup required</span>
+              </div>
+              <div className="admin-analytics-stats">
+                {[
+                  ["Active visitors", "—", "GA4 active users"],
+                  ["Page views", "—", "Views across all pages"],
+                  ["Avg. engagement", "—", "Per active visitor"],
+                ].map(([label, value, note]) => (
+                  <article className="admin-kpi" key={label}>
+                    <p>{label}</p>
+                    <strong aria-label={`${label}: unavailable`}>{value}</strong>
+                    <small>{note}</small>
+                  </article>
+                ))}
+              </div>
+              <div className="admin-panel admin-page-heatmap">
+                <div className="admin-panel-heading">
+                  <div>
+                    <h2>Page popularity heatmap</h2>
+                    <p>
+                      Compare visitors, page views, and average engagement time by page.
+                    </p>
+                  </div>
+                  <div
+                    aria-label="Page view intensity: low to high"
+                    className="admin-heatmap-legend"
+                  >
+                    <span>Low</span>
+                    <i />
+                    <span>High</span>
+                  </div>
+                </div>
+                <div className="admin-table-wrap">
+                  <table className="admin-table admin-analytics-table">
+                    <thead>
+                      <tr>
+                        <th>Page</th>
+                        <th>Visitors</th>
+                        <th>Page views</th>
+                        <th>Avg. engagement</th>
+                      </tr>
+                    </thead>
+                  </table>
+                  <p className="admin-analytics-empty">
+                    Page-level heatmap will appear when secure GA4 report access is
+                    connected.
+                  </p>
                 </div>
               </div>
-              <div className="admin-table-wrap">
-                <table className="admin-table admin-analytics-table">
-                  <thead>
-                    <tr>
-                      <th>Page</th>
-                      <th>Visitors</th>
-                      <th>Page views</th>
-                      <th>Avg. engagement</th>
-                    </tr>
-                  </thead>
-                </table>
-                <p className="admin-analytics-empty">
-                  Page-level heatmap will appear when secure GA4 report access is
-                  connected.
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
+            </section>
+          )}
 
-        {isContentSection && (
-          <section className="admin-page-content">
-            {!editor ? (
+          {isContentSection && (
+            <section className="admin-page-content">
+              {!editor ? (
+                <div className="admin-panel">
+                  <div className="admin-panel-heading admin-list-heading">
+                    <div>
+                      <h2>{title} items</h2>
+                      <p>
+                        {section === "services"
+                          ? "Edit a service to set its background. The background field is available only when Display order is not 1."
+                          : "Manage published content and drafts."}
+                      </p>
+                    </div>
+                    <button
+                      className="admin-button admin-button-primary"
+                      onClick={() =>
+                        startEditor(
+                          section === "services" ? { id: "", order: 1 } : { id: "" },
+                        )
+                      }
+                    >
+                      + Add item
+                    </button>
+                  </div>
+                  <div className="admin-toolbar">
+                    <div className="admin-list-controls">
+                      <input
+                        className="admin-search"
+                        type="search"
+                        placeholder={`Search ${title.toLowerCase()}…`}
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                      />
+                      <div
+                        aria-label="Filter content by status"
+                        className="admin-filter-tabs"
+                        role="group"
+                      >
+                        {(
+                          [
+                            ["all", `All ${records.length}`],
+                            ["published", `Published ${publishedContentCount}`],
+                            ["draft", `Drafts ${draftContentCount}`],
+                          ] as const
+                        ).map(([filter, label]) => (
+                          <button
+                            aria-pressed={contentStatusFilter === filter}
+                            className={contentStatusFilter === filter ? "active" : ""}
+                            key={filter}
+                            onClick={() => setContentStatusFilter(filter)}
+                            type="button"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <span>{visibleContentRecords.length} shown</span>
+                  </div>
+                  {loading ? (
+                    <Loading />
+                  ) : records.length === 0 ? (
+                    <Empty />
+                  ) : visibleContentRecords.length === 0 ? (
+                    <p className="admin-empty">
+                      No {contentStatusFilter} items match this view. Try another status
+                      filter.
+                    </p>
+                  ) : (
+                    <div className="admin-table-wrap">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Order</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleContentRecords.map((row) => (
+                            <tr key={row.id}>
+                              <td>
+                                <strong>
+                                  {text(row.title || row.name || row.q || row.id)}
+                                </strong>
+                                <small className="admin-cell-secondary">
+                                  {text(row.desc || row.ans || row.quote || row.price)}
+                                </small>
+                              </td>
+                              <td>{text(row.order)}</td>
+                              <td>
+                                <StatusPill status={text(row.status)} />
+                              </td>
+                              <td>
+                                <div className="admin-row-actions">
+                                  <button
+                                    className="admin-text-button"
+                                    onClick={() => startEditor(row)}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    className="admin-text-button danger"
+                                    disabled={saving}
+                                    onClick={() => void handleDelete(row)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="admin-panel admin-editor">
+                  <div className="admin-panel-heading">
+                    <div>
+                      <h2>{editor.id ? "Edit item" : "Create item"}</h2>
+                      <p>
+                        Complete the content details, then choose whether to save as a
+                        draft or publish it.
+                      </p>
+                    </div>
+                    <button className="admin-button" onClick={closeEditor} type="button">
+                      ← Back to {title.toLowerCase()}
+                    </button>
+                  </div>
+                  <form className="admin-form-grid" onSubmit={saveEditor}>
+                    {collectionFields[section as ManagedCollection]
+                      .filter(
+                        (field) =>
+                          !(
+                            section === "services" &&
+                            field.name === "background" &&
+                            Number(editor.order) === 1
+                          ),
+                      )
+                      .map((field) => {
+                        const FieldWrapper =
+                          field.type === "image" || field.type === "gallery"
+                            ? "div"
+                            : "label";
+                        const galleryValue = editor[field.name];
+                        return (
+                          <FieldWrapper
+                            className={`admin-field ${field.type === "textarea" || field.type === "gallery" ? "wide" : ""} ${field.type === "checkbox" ? "admin-checkbox-field" : ""}`}
+                            key={field.name}
+                          >
+                            <span>{field.label}</span>
+                            {field.type === "image" ? (
+                              <CloudinaryImageField
+                                aspectRatio={field.aspectRatio}
+                                fieldName={field.name}
+                                onChange={(url) =>
+                                  setEditor((current) =>
+                                    current ? { ...current, [field.name]: url } : current,
+                                  )
+                                }
+                                required={!field.optional}
+                                value={text(editor[field.name])}
+                              />
+                            ) : field.type === "gallery" ? (
+                              <CloudinaryImageGalleryField
+                                fieldName={field.name}
+                                maxItems={field.maxItems}
+                                onChange={(urls) =>
+                                  setEditor((current) =>
+                                    current
+                                      ? { ...current, [field.name]: urls }
+                                      : current,
+                                  )
+                                }
+                                value={
+                                  Array.isArray(galleryValue)
+                                    ? galleryValue.map(String)
+                                    : text(galleryValue)
+                                        .split(/[\n,]/)
+                                        .map((url) => url.trim())
+                                        .filter(Boolean)
+                                }
+                              />
+                            ) : field.type === "checkbox" ? (
+                              <input
+                                checked={Boolean(editor[field.name])}
+                                name={field.name}
+                                onChange={(event) =>
+                                  setEditor((current) =>
+                                    current
+                                      ? { ...current, [field.name]: event.target.checked }
+                                      : current,
+                                  )
+                                }
+                                type="checkbox"
+                              />
+                            ) : field.type === "select" ? (
+                              <select
+                                name={field.name}
+                                value={text(
+                                  editor[field.name] || field.options?.[0] || "",
+                                )}
+                                onChange={(event) =>
+                                  setEditor((current) =>
+                                    current
+                                      ? { ...current, [field.name]: event.target.value }
+                                      : current,
+                                  )
+                                }
+                              >
+                                {field.options?.map((option) => (
+                                  <option key={option}>{option}</option>
+                                ))}
+                              </select>
+                            ) : field.type === "textarea" ? (
+                              <textarea
+                                aria-label={field.label}
+                                name={field.name}
+                                required={!field.optional}
+                                value={text(editor[field.name])}
+                                onChange={(event) =>
+                                  setEditor((current) =>
+                                    current
+                                      ? { ...current, [field.name]: event.target.value }
+                                      : current,
+                                  )
+                                }
+                                rows={4}
+                              />
+                            ) : (
+                              <input
+                                name={field.name}
+                                required={!field.optional}
+                                type={field.type ?? "text"}
+                                value={text(editor[field.name])}
+                                onChange={(event) =>
+                                  setEditor((current) =>
+                                    current
+                                      ? { ...current, [field.name]: event.target.value }
+                                      : current,
+                                  )
+                                }
+                              />
+                            )}
+                          </FieldWrapper>
+                        );
+                      })}
+                    <label className="admin-field">
+                      <span>Display order</span>
+                      <input
+                        type="number"
+                        name="order"
+                        min="0"
+                        step="1"
+                        required
+                        value={text(editor.order ?? 0)}
+                        onChange={(event) =>
+                          setEditor((current) =>
+                            current
+                              ? { ...current, order: Number(event.target.value) }
+                              : current,
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="admin-field">
+                      <span>Visibility</span>
+                      <select
+                        name="status"
+                        onChange={(event) =>
+                          setEditor((current) =>
+                            current
+                              ? { ...current, status: event.target.value }
+                              : current,
+                          )
+                        }
+                        value={text(editor.status || "Draft")}
+                      >
+                        <option>Draft</option>
+                        <option>Published</option>
+                      </select>
+                    </label>
+                    <div className="admin-form-actions wide">
+                      <button
+                        type="button"
+                        className="admin-button"
+                        onClick={closeEditor}
+                      >
+                        Discard changes
+                      </button>
+                      <button
+                        className="admin-button admin-button-primary"
+                        disabled={saving}
+                      >
+                        {saving ? "Saving…" : "Save item"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </section>
+          )}
+
+          {section === "leads" && (
+            <section className="admin-page-content admin-leads-page">
               <div className="admin-panel">
                 <div className="admin-panel-heading admin-list-heading">
                   <div>
-                    <h2>{title} items</h2>
-                    <p>
-                      {section === "services"
-                        ? "Edit a service to set its background. The background field is available only when Display order is not 1."
-                        : "Manage published content and drafts."}
-                    </p>
+                    <h2>Enquiries</h2>
+                    <p>Review, track, and follow up on incoming project leads.</p>
                   </div>
                   <button
-                    className="admin-button admin-button-primary"
-                    onClick={() =>
-                      setEditor(
-                        section === "services" ? { id: "", order: 1 } : { id: "" },
-                      )
-                    }
+                    className="admin-button"
+                    disabled={records.length === 0}
+                    onClick={() => {
+                      try {
+                        downloadCsv("kitari-leads.csv", records);
+                        setNotice("Leads exported as CSV.");
+                      } catch (reason) {
+                        setError(formatError(reason));
+                      }
+                    }}
                   >
-                    + Add item
+                    Export CSV ↓
                   </button>
                 </div>
                 <div className="admin-toolbar">
@@ -994,87 +1529,91 @@ export default function AdminPage() {
                     <input
                       className="admin-search"
                       type="search"
-                      placeholder={`Search ${title.toLowerCase()}…`}
+                      placeholder="Search by name, email, or project…"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                     />
                     <div
-                      aria-label="Filter content by status"
+                      aria-label="Filter enquiries by status"
                       className="admin-filter-tabs"
                       role="group"
                     >
                       {(
                         [
-                          ["all", `All ${records.length}`],
-                          ["published", `Published ${publishedContentCount}`],
-                          ["draft", `Drafts ${draftContentCount}`],
+                          ["all", "All", leadStatusCounts.all],
+                          ["New", "New", leadStatusCounts.New],
+                          ["Contacted", "Contacted", leadStatusCounts.Contacted],
+                          ["Won", "Won", leadStatusCounts.Won],
                         ] as const
-                      ).map(([filter, label]) => (
+                      ).map(([filter, label, count]) => (
                         <button
-                          aria-pressed={contentStatusFilter === filter}
-                          className={contentStatusFilter === filter ? "active" : ""}
+                          aria-pressed={leadStatusFilter === filter}
+                          className={leadStatusFilter === filter ? "active" : ""}
                           key={filter}
-                          onClick={() => setContentStatusFilter(filter)}
+                          onClick={() => setLeadStatusFilter(filter)}
                           type="button"
                         >
-                          {label}
+                          {label} {count}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <span>{visibleContentRecords.length} shown</span>
+                  <span>{visibleLeads.length} shown</span>
                 </div>
                 {loading ? (
                   <Loading />
-                ) : records.length === 0 ? (
-                  <Empty />
-                ) : visibleContentRecords.length === 0 ? (
-                  <p className="admin-empty">
-                    No {contentStatusFilter} items match this view. Try another status
-                    filter.
-                  </p>
+                ) : visibleLeads.length === 0 ? (
+                  records.length === 0 ? (
+                    <Empty />
+                  ) : (
+                    <p className="admin-empty">
+                      No {leadStatusFilter.toLowerCase()} enquiries. Choose another status
+                      or clear the search.
+                    </p>
+                  )
                 ) : (
                   <div className="admin-table-wrap">
                     <table className="admin-table">
                       <thead>
                         <tr>
-                          <th>Item</th>
-                          <th>Order</th>
+                          <th>Name</th>
+                          <th>Project</th>
+                          <th>Email</th>
+                          <th>Received</th>
                           <th>Status</th>
-                          <th>Actions</th>
+                          <th>Details</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleContentRecords.map((row) => (
-                          <tr key={row.id}>
+                        {visibleLeads.map((lead) => (
+                          <tr key={lead.id}>
                             <td>
-                              <strong>
-                                {text(row.title || row.name || row.q || row.id)}
-                              </strong>
-                              <small className="admin-cell-secondary">
-                                {text(row.desc || row.ans || row.quote || row.price)}
-                              </small>
+                              <strong>{text(lead.name)}</strong>
                             </td>
-                            <td>{text(row.order)}</td>
+                            <td>{text(lead.projectType)}</td>
+                            <td>{text(lead.email)}</td>
+                            <td>{text(lead.createdAt)}</td>
                             <td>
-                              <StatusPill status={text(row.status)} />
+                              <select
+                                aria-label={`Status for ${text(lead.name)}`}
+                                value={text(lead.status)}
+                                disabled={saving}
+                                onChange={(event) =>
+                                  void changeLeadStatus(lead, event.target.value)
+                                }
+                              >
+                                <option>New</option>
+                                <option>Contacted</option>
+                                <option>Won</option>
+                              </select>
                             </td>
                             <td>
-                              <div className="admin-row-actions">
-                                <button
-                                  className="admin-text-button"
-                                  onClick={() => setEditor(row)}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="admin-text-button danger"
-                                  disabled={saving}
-                                  onClick={() => void handleDelete(row)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                              <button
+                                className="admin-text-button"
+                                onClick={() => setLeadDetails(lead)}
+                              >
+                                Open
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -1083,37 +1622,187 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
-            ) : (
+              {leadDetails && (
+                <aside
+                  className="admin-panel admin-detail-panel"
+                  aria-label="Enquiry details"
+                >
+                  <div className="admin-panel-heading">
+                    <div>
+                      <h2>{text(leadDetails.name)}</h2>
+                      <p>
+                        {text(leadDetails.email)} · {text(leadDetails.projectType)}
+                      </p>
+                    </div>
+                    <button
+                      className="admin-text-button"
+                      onClick={() => setLeadDetails(null)}
+                    >
+                      Close ×
+                    </button>
+                  </div>
+                  <p className="admin-lead-message">{text(leadDetails.message)}</p>
+                </aside>
+              )}
+            </section>
+          )}
+
+          {section === "prospects" && (
+            <ProspectManager
+              adminEmail={session.user?.email ?? ""}
+              initialProspect={dashboard.uncontacted.find(
+                (prospect) => prospect.id === selectedProspectId,
+              )}
+              initialProspectId={selectedProspectId}
+            />
+          )}
+
+          {section === "newsletter" && (
+            <section className="admin-page-content">
+              <div className="admin-panel">
+                <div className="admin-panel-heading admin-list-heading">
+                  <div>
+                    <h2>Newsletter subscribers</h2>
+                    <p>Download the current subscriber list or remove a record.</p>
+                  </div>
+                  <button
+                    className="admin-button"
+                    disabled={!records.length}
+                    onClick={() => {
+                      try {
+                        downloadCsv("kitari-newsletter-subscribers.csv", records);
+                        setNotice("Subscribers exported as CSV.");
+                      } catch (reason) {
+                        setError(formatError(reason));
+                      }
+                    }}
+                  >
+                    Export CSV ↓
+                  </button>
+                </div>
+                <div className="admin-toolbar">
+                  <input
+                    className="admin-search"
+                    type="search"
+                    placeholder="Search subscribers…"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                  <span>{records.length} subscribers</span>
+                </div>
+                {loading ? (
+                  <Loading />
+                ) : records.length === 0 ? (
+                  <Empty />
+                ) : (
+                  <div className="admin-table-wrap">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Joined</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {records.map((item) => (
+                          <tr key={item.id}>
+                            <td>{text(item.email)}</td>
+                            <td>{text(item.createdAt)}</td>
+                            <td>
+                              <button
+                                className="admin-text-button danger"
+                                disabled={saving}
+                                onClick={() => void handleDelete(item)}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {activeSettingsSection && (
+            <section className="admin-page-content">
               <div className="admin-panel admin-editor">
                 <div className="admin-panel-heading">
                   <div>
-                    <h2>{editor.id ? "Edit item" : "Create item"}</h2>
-                    <p>Fields marked by the form are required.</p>
+                    <h2>
+                      {section === "about"
+                        ? "About section content"
+                        : section === "homepage"
+                          ? "Homepage content"
+                          : section === "appearance"
+                            ? "Website appearance"
+                            : "Studio identity and contact"}
+                    </h2>
+                    <p>
+                      {section === "about"
+                        ? "Update the About text, center image, and surrounding statistics."
+                        : section === "homepage"
+                          ? "Edit homepage copy and all ten hero card images. Published collections are managed in Content."
+                          : section === "appearance"
+                            ? "Adjust the site-wide typeface and text scale. Preview the effect before saving."
+                            : "Update your studio identity, contact details, and social links."}
+                    </p>
                   </div>
-                  <button className="admin-text-button" onClick={() => setEditor(null)}>
-                    Close ×
-                  </button>
                 </div>
-                <form className="admin-form-grid" onSubmit={saveEditor}>
-                  {collectionFields[section as ManagedCollection]
-                    .filter(
-                      (field) =>
-                        !(
-                          section === "services" &&
-                          field.name === "background" &&
-                          Number(editor.order) === 1
-                        ),
-                    )
-                    .map((field) => {
-                      const FieldWrapper =
-                        field.type === "image" || field.type === "gallery"
-                          ? "div"
-                          : "label";
-                      const galleryValue = editor[field.name];
-                      return (
-                        <FieldWrapper
-                          className={`admin-field ${field.type === "textarea" || field.type === "gallery" ? "wide" : ""} ${field.type === "checkbox" ? "admin-checkbox-field" : ""}`}
-                          key={field.name}
+                {loading ? (
+                  <Loading />
+                ) : (
+                  <form className="admin-form-grid" onSubmit={reviewSiteSettings}>
+                    {section === "homepage" && (
+                      <nav
+                        aria-label="Homepage section index"
+                        className="admin-homepage-section-nav wide"
+                      >
+                        {Object.entries(homepageTextGroupHeadings).map(
+                          ([index, label]) => (
+                            <a href={`#homepage-section-${index}`} key={index}>
+                              {label}
+                            </a>
+                          ),
+                        )}
+                      </nav>
+                    )}
+                    {(section === "about"
+                      ? aboutFields
+                      : section === "homepage"
+                        ? homepageFields
+                        : section === "appearance"
+                          ? appearanceFields
+                          : settingFields
+                    ).map((field, index) => (
+                      <Fragment key={`homepage-group-${index}`}>
+                        {(section === "homepage" && homepageTextGroupHeadings[index]) ||
+                        (section === "about" && (index === 0 || index === 3)) ||
+                        (section === "settings" && websiteSettingGroupHeadings[index]) ? (
+                          <div className="admin-home-copy-group wide">
+                            <h3
+                              id={
+                                section === "homepage"
+                                  ? `homepage-section-${index}`
+                                  : undefined
+                              }
+                            >
+                              {section === "homepage"
+                                ? homepageTextGroupHeadings[index]
+                                : section === "about"
+                                  ? index === 0
+                                    ? "Studio overview"
+                                    : "Studio statistics"
+                                  : websiteSettingGroupHeadings[index]}
+                            </h3>
+                          </div>
+                        ) : null}
+                        <div
+                          className={`admin-field ${field.type === "textarea" || field.type === "image" ? "wide" : ""}`}
                         >
                           <span>{field.label}</span>
                           {field.type === "image" ? (
@@ -1121,520 +1810,201 @@ export default function AdminPage() {
                               aspectRatio={field.aspectRatio}
                               fieldName={field.name}
                               onChange={(url) =>
-                                setEditor((current) =>
-                                  current ? { ...current, [field.name]: url } : current,
-                                )
+                                setSettings((current) => ({
+                                  ...current,
+                                  [field.name]: url,
+                                }))
                               }
-                              required={!field.optional}
-                              value={text(editor[field.name])}
+                              value={settings[field.name] ?? ""}
                             />
-                          ) : field.type === "gallery" ? (
-                            <CloudinaryImageGalleryField
-                              fieldName={field.name}
-                              maxItems={field.maxItems}
-                              onChange={(urls) =>
-                                setEditor((current) =>
-                                  current ? { ...current, [field.name]: urls } : current,
-                                )
-                              }
-                              value={
-                                Array.isArray(galleryValue)
-                                  ? galleryValue.map(String)
-                                  : text(galleryValue)
-                                      .split(/[\n,]/)
-                                      .map((url) => url.trim())
-                                      .filter(Boolean)
-                              }
-                            />
-                          ) : field.type === "checkbox" ? (
-                            <input
-                              checked={Boolean(editor[field.name])}
-                              name={field.name}
-                              onChange={(event) =>
-                                setEditor((current) =>
-                                  current
-                                    ? { ...current, [field.name]: event.target.checked }
-                                    : current,
-                                )
-                              }
-                              type="checkbox"
-                            />
-                          ) : field.type === "select" ? (
-                            <select
-                              name={field.name}
-                              value={text(editor[field.name] || field.options?.[0] || "")}
-                              onChange={(event) =>
-                                setEditor((current) =>
-                                  current
-                                    ? { ...current, [field.name]: event.target.value }
-                                    : current,
-                                )
-                              }
-                            >
-                              {field.options?.map((option) => (
-                                <option key={option}>{option}</option>
-                              ))}
-                            </select>
                           ) : field.type === "textarea" ? (
                             <textarea
                               aria-label={field.label}
                               name={field.name}
-                              required={!field.optional}
-                              value={text(editor[field.name])}
-                              onChange={(event) =>
-                                setEditor((current) =>
-                                  current
-                                    ? { ...current, [field.name]: event.target.value }
-                                    : current,
-                                )
-                              }
+                              required={"optional" in field ? !field.optional : true}
                               rows={4}
+                              value={settings[field.name] ?? ""}
+                              onChange={(event) =>
+                                setSettings((current) => ({
+                                  ...current,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
                             />
+                          ) : field.type === "select" ? (
+                            <select
+                              aria-label={field.label}
+                              name={field.name}
+                              value={settings[field.name] ?? ""}
+                              onChange={(event) =>
+                                setSettings((current) => ({
+                                  ...current,
+                                  [field.name]: event.target.value,
+                                }))
+                              }
+                            >
+                              {field.options?.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
                           ) : (
                             <input
+                              aria-label={field.label}
                               name={field.name}
-                              required={!field.optional}
-                              type="text"
-                              value={text(editor[field.name])}
+                              type={field.type ?? "text"}
+                              min={field.type === "number" ? field.minimum : undefined}
+                              max={field.type === "number" ? field.maximum : undefined}
+                              step={field.type === "number" ? field.step : undefined}
+                              required={"optional" in field ? !field.optional : true}
+                              value={settings[field.name] ?? ""}
                               onChange={(event) =>
-                                setEditor((current) =>
-                                  current
-                                    ? { ...current, [field.name]: event.target.value }
-                                    : current,
-                                )
+                                setSettings((current) => ({
+                                  ...current,
+                                  [field.name]: event.target.value,
+                                }))
                               }
                             />
                           )}
-                        </FieldWrapper>
-                      );
-                    })}
-                  <label className="admin-field">
-                    <span>Display order</span>
-                    <input
-                      type="number"
-                      name="order"
-                      min="0"
-                      step="1"
-                      required
-                      value={text(editor.order ?? 0)}
-                      onChange={(event) =>
-                        setEditor((current) =>
-                          current
-                            ? { ...current, order: Number(event.target.value) }
-                            : current,
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="admin-field">
-                    <span>Visibility</span>
-                    <select name="status" defaultValue={text(editor.status || "Draft")}>
-                      <option>Draft</option>
-                      <option>Published</option>
-                    </select>
-                  </label>
-                  <div className="admin-form-actions wide">
-                    <button
-                      type="button"
-                      className="admin-button"
-                      onClick={() => setEditor(null)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      className="admin-button admin-button-primary"
-                      disabled={saving}
-                    >
-                      {saving ? "Saving…" : "Save item"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </section>
-        )}
-
-        {section === "leads" && (
-          <section className="admin-page-content">
-            <div className="admin-panel">
-              <div className="admin-panel-heading admin-list-heading">
-                <div>
-                  <h2>Enquiries</h2>
-                  <p>Review, track, and follow up on incoming project leads.</p>
-                </div>
-                <button
-                  className="admin-button"
-                  disabled={records.length === 0}
-                  onClick={() => {
-                    try {
-                      downloadCsv("kitari-leads.csv", records);
-                      setNotice("Leads exported as CSV.");
-                    } catch (reason) {
-                      setError(formatError(reason));
-                    }
-                  }}
-                >
-                  Export CSV ↓
-                </button>
-              </div>
-              <div className="admin-toolbar">
-                <input
-                  className="admin-search"
-                  type="search"
-                  placeholder="Search leads…"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <span>{records.length} leads</span>
-              </div>
-              {loading ? (
-                <Loading />
-              ) : records.length === 0 ? (
-                <Empty />
-              ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Project</th>
-                        <th>Email</th>
-                        <th>Received</th>
-                        <th>Status</th>
-                        <th>Details</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {records.map((lead) => (
-                        <tr key={lead.id}>
-                          <td>
-                            <strong>{text(lead.name)}</strong>
-                          </td>
-                          <td>{text(lead.projectType)}</td>
-                          <td>{text(lead.email)}</td>
-                          <td>{text(lead.createdAt)}</td>
-                          <td>
-                            <select
-                              aria-label={`Status for ${text(lead.name)}`}
-                              value={text(lead.status)}
-                              disabled={saving}
-                              onChange={(event) =>
-                                void changeLeadStatus(lead, event.target.value)
-                              }
-                            >
-                              <option>New</option>
-                              <option>Contacted</option>
-                              <option>Won</option>
-                            </select>
-                          </td>
-                          <td>
-                            <button
-                              className="admin-text-button"
-                              onClick={() => setLeadDetails(lead)}
-                            >
-                              Open
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            {leadDetails && (
-              <div className="admin-panel admin-detail-panel">
-                <div className="admin-panel-heading">
-                  <div>
-                    <h2>{text(leadDetails.name)}</h2>
-                    <p>
-                      {text(leadDetails.email)} · {text(leadDetails.projectType)}
-                    </p>
-                  </div>
-                  <button
-                    className="admin-text-button"
-                    onClick={() => setLeadDetails(null)}
-                  >
-                    Close ×
-                  </button>
-                </div>
-                <p className="admin-lead-message">{text(leadDetails.message)}</p>
-              </div>
-            )}
-          </section>
-        )}
-
-        {section === "newsletter" && (
-          <section className="admin-page-content">
-            <div className="admin-panel">
-              <div className="admin-panel-heading admin-list-heading">
-                <div>
-                  <h2>Newsletter subscribers</h2>
-                  <p>Download the current subscriber list or remove a record.</p>
-                </div>
-                <button
-                  className="admin-button"
-                  disabled={!records.length}
-                  onClick={() => {
-                    try {
-                      downloadCsv("kitari-newsletter-subscribers.csv", records);
-                      setNotice("Subscribers exported as CSV.");
-                    } catch (reason) {
-                      setError(formatError(reason));
-                    }
-                  }}
-                >
-                  Export CSV ↓
-                </button>
-              </div>
-              <div className="admin-toolbar">
-                <input
-                  className="admin-search"
-                  type="search"
-                  placeholder="Search subscribers…"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <span>{records.length} subscribers</span>
-              </div>
-              {loading ? (
-                <Loading />
-              ) : records.length === 0 ? (
-                <Empty />
-              ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Email</th>
-                        <th>Joined</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {records.map((item) => (
-                        <tr key={item.id}>
-                          <td>{text(item.email)}</td>
-                          <td>{text(item.createdAt)}</td>
-                          <td>
-                            <button
-                              className="admin-text-button danger"
-                              disabled={saving}
-                              onClick={() => void handleDelete(item)}
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {(section === "settings" ||
-          section === "about" ||
-          section === "homepage" ||
-          section === "appearance") && (
-          <section className="admin-page-content">
-            <div className="admin-panel admin-editor">
-              <div className="admin-panel-heading">
-                <div>
-                  <h2>
-                    {section === "about"
-                      ? "About section content"
-                      : section === "homepage"
-                        ? "Homepage text"
-                        : section === "appearance"
-                          ? "Website appearance"
-                          : "Website details"}
-                  </h2>
-                  <p>
-                    {section === "about"
-                      ? "Update the About text, center image, and surrounding statistics."
-                      : section === "homepage"
-                        ? "Edit homepage text and all ten moving hero card images. Content collections such as services, projects, testimonials, and FAQs are managed in their own sections."
-                        : section === "appearance"
-                          ? "Adjust the site-wide typeface and text scale. Preview the effect before saving."
-                          : "Update your public contact details and core messaging."}
-                  </p>
-                </div>
-              </div>
-              {loading ? (
-                <Loading />
-              ) : (
-                <form className="admin-form-grid" onSubmit={saveSiteSettings}>
-                  {(section === "about"
-                    ? aboutFields
-                    : section === "homepage"
-                      ? homepageFields
-                      : section === "appearance"
-                        ? appearanceFields
-                        : settingFields
-                  ).map((field, index) => (
-                    <Fragment key={`homepage-group-${index}`}>
-                      {section === "homepage" && homepageTextGroupHeadings[index] && (
-                        <div className="admin-home-copy-group wide">
-                          <h3>{homepageTextGroupHeadings[index]}</h3>
                         </div>
-                      )}
-                      <div
-                        className={`admin-field ${field.type === "textarea" || field.type === "image" ? "wide" : ""}`}
-                      >
-                        <span>{field.label}</span>
-                        {field.type === "image" ? (
-                          <CloudinaryImageField
-                            aspectRatio={field.aspectRatio}
-                            fieldName={field.name}
-                            onChange={(url) =>
-                              setSettings((current) => ({
-                                ...current,
-                                [field.name]: url,
-                              }))
-                            }
-                            value={settings[field.name] ?? ""}
-                          />
-                        ) : field.type === "textarea" ? (
-                          <textarea
-                            aria-label={field.label}
-                            name={field.name}
-                            required={"optional" in field ? !field.optional : true}
-                            rows={4}
-                            value={settings[field.name] ?? ""}
-                            onChange={(event) =>
-                              setSettings((current) => ({
-                                ...current,
-                                [field.name]: event.target.value,
-                              }))
-                            }
-                          />
-                        ) : field.type === "select" ? (
-                          <select
-                            aria-label={field.label}
-                            name={field.name}
-                            value={settings[field.name] ?? ""}
-                            onChange={(event) =>
-                              setSettings((current) => ({
-                                ...current,
-                                [field.name]: event.target.value,
-                              }))
-                            }
-                          >
-                            {field.options?.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            aria-label={field.label}
-                            name={field.name}
-                            type={field.type ?? "text"}
-                            min={field.type === "number" ? field.minimum : undefined}
-                            max={field.type === "number" ? field.maximum : undefined}
-                            step={field.type === "number" ? field.step : undefined}
-                            required={"optional" in field ? !field.optional : true}
-                            value={settings[field.name] ?? ""}
-                            onChange={(event) =>
-                              setSettings((current) => ({
-                                ...current,
-                                [field.name]: event.target.value,
-                              }))
-                            }
-                          />
-                        )}
+                      </Fragment>
+                    ))}
+                    {section === "appearance" && (
+                      <div className="admin-appearance-preview wide">
+                        <span className="admin-eyebrow">Live preview</span>
+                        <strong
+                          style={{
+                            fontFamily: appearanceFontFamily,
+                            fontSize: `${26 * appearanceTextScale * appearanceHeadingScale}px`,
+                          }}
+                        >
+                          Thoughtful digital experiences
+                        </strong>
+                        <p
+                          style={{
+                            fontFamily: appearanceFontFamily,
+                            fontSize: `${14 * appearanceTextScale * appearanceBodyScale}px`,
+                          }}
+                        >
+                          Your global typeface and scale will be applied across the public
+                          website.
+                        </p>
+                        <nav
+                          aria-label="Navigation preview"
+                          className="admin-appearance-preview-nav"
+                          style={{
+                            fontFamily: appearanceFontFamily,
+                            fontSize: `${13 * appearanceTextScale * appearanceNavScale}px`,
+                          }}
+                        >
+                          Home <span>About</span> <span>Services</span>
+                        </nav>
+                        <button
+                          className="admin-button admin-button-primary admin-appearance-preview-button"
+                          style={{
+                            fontFamily: appearanceFontFamily,
+                            fontSize: `${13 * appearanceTextScale * appearanceButtonScale}px`,
+                          }}
+                          type="button"
+                        >
+                          Schedule a Call
+                        </button>
+                        <small>
+                          Text scale: {Math.round(appearanceTextScale * 100)}%
+                        </small>
+                        <small>
+                          Headings {Math.round(appearanceHeadingScale * 100)}% · Body{" "}
+                          {Math.round(appearanceBodyScale * 100)}% · Navigation{" "}
+                          {Math.round(appearanceNavScale * 100)}% · Actions{" "}
+                          {Math.round(appearanceButtonScale * 100)}%
+                        </small>
                       </div>
-                    </Fragment>
-                  ))}
-                  {section === "appearance" && (
-                    <div className="admin-appearance-preview wide">
-                      <span className="admin-eyebrow">Live preview</span>
-                      <strong
-                        style={{
-                          fontFamily: appearanceFontFamily,
-                          fontSize: `${26 * appearanceTextScale * appearanceHeadingScale}px`,
-                        }}
-                      >
-                        Thoughtful digital experiences
-                      </strong>
-                      <p
-                        style={{
-                          fontFamily: appearanceFontFamily,
-                          fontSize: `${14 * appearanceTextScale * appearanceBodyScale}px`,
-                        }}
-                      >
-                        Your global typeface and scale will be applied across the public
-                        website.
+                    )}
+                    <div className="admin-settings-publish-bar wide">
+                      <p aria-live="polite">
+                        {settingsChanges.length} unpublished{" "}
+                        {settingsChanges.length === 1 ? "change" : "changes"}
                       </p>
-                      <nav
-                        aria-label="Navigation preview"
-                        className="admin-appearance-preview-nav"
-                        style={{
-                          fontFamily: appearanceFontFamily,
-                          fontSize: `${13 * appearanceTextScale * appearanceNavScale}px`,
-                        }}
-                      >
-                        Home <span>About</span> <span>Services</span>
-                      </nav>
                       <button
-                        className="admin-button admin-button-primary admin-appearance-preview-button"
-                        style={{
-                          fontFamily: appearanceFontFamily,
-                          fontSize: `${13 * appearanceTextScale * appearanceButtonScale}px`,
-                        }}
+                        className="admin-button"
+                        disabled={saving || settingsChanges.length === 0}
+                        onClick={resetSiteSettings}
                         type="button"
                       >
-                        Schedule a Call
+                        Reset
                       </button>
-                      <small>Text scale: {Math.round(appearanceTextScale * 100)}%</small>
-                      <small>
-                        Headings {Math.round(appearanceHeadingScale * 100)}% · Body{" "}
-                        {Math.round(appearanceBodyScale * 100)}% · Navigation{" "}
-                        {Math.round(appearanceNavScale * 100)}% · Actions{" "}
-                        {Math.round(appearanceButtonScale * 100)}%
-                      </small>
+                      <button
+                        className="admin-button admin-button-primary"
+                        disabled={saving || settingsChanges.length === 0}
+                      >
+                        Review & publish
+                      </button>
                     </div>
-                  )}
-                  <div className="admin-form-actions wide">
-                    <button
-                      className="admin-button admin-button-primary"
-                      disabled={saving}
-                    >
-                      {saving ? "Saving…" : "Save settings"}
-                    </button>
-                  </div>
-                </form>
-              )}
+                  </form>
+                )}
+              </div>
+            </section>
+          )}
+          {settingsReviewOpen && pendingSettings && (
+            <div
+              aria-labelledby="admin-settings-review-title"
+              aria-modal="true"
+              className="admin-review-overlay"
+              role="dialog"
+            >
+              <section className="admin-review-dialog">
+                <p className="admin-eyebrow">PUBLIC WEBSITE</p>
+                <h2 id="admin-settings-review-title">Review changes before publishing</h2>
+                <p>
+                  These changes will appear on the public website as soon as they are
+                  published.
+                </p>
+                <div className="admin-review-changes">
+                  {settingsChanges.map(({ field, previous, current }) => (
+                    <article key={field.name}>
+                      <strong>{field.label}</strong>
+                      <dl>
+                        <div>
+                          <dt>Before</dt>
+                          <dd>{previous || "Empty"}</dd>
+                        </div>
+                        <div>
+                          <dt>After</dt>
+                          <dd>{current || "Empty"}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+                <div className="admin-review-actions">
+                  <button
+                    className="admin-button"
+                    disabled={saving}
+                    onClick={() => {
+                      setSettingsReviewOpen(false);
+                      setPendingSettings(null);
+                    }}
+                    type="button"
+                  >
+                    Back to editing
+                  </button>
+                  <button
+                    className="admin-button admin-button-primary"
+                    disabled={saving}
+                    onClick={() => void publishSiteSettings()}
+                    type="button"
+                  >
+                    {saving ? "Publishing…" : "Publish to website"}
+                  </button>
+                </div>
+              </section>
             </div>
-          </section>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
     </div>
   );
-}
-
-function Kpi({ label, value, note }: { label: string; value: number; note: string }) {
-  return (
-    <article className="admin-kpi">
-      <p>{label}</p>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </article>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const style =
-    status.toLowerCase() === "published" || status.toLowerCase() === "won"
-      ? "positive"
-      : status.toLowerCase() === "draft" || status.toLowerCase() === "new"
-        ? "pending"
-        : "neutral";
-  return <span className={`admin-status ${style}`}>{status}</span>;
 }
 
 function Loading() {
@@ -1651,23 +2021,4 @@ function Empty() {
       Nothing here yet. Items will appear here when available.
     </p>
   );
-}
-
-function navIcon(section: Section) {
-  const icons: Record<string, string> = {
-    overview: "◫",
-    analytics: "▥",
-    homepage: "✎",
-    about: "◉",
-    projects: "▧",
-    catalogue: "◈",
-    services: "◇",
-    testimonials: "❞",
-    faqs: "?",
-    leads: "↘",
-    newsletter: "✉",
-    settings: "⚙",
-    appearance: "✧",
-  };
-  return icons[section] ?? "•";
 }

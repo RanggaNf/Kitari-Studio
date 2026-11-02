@@ -14,10 +14,12 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { getAuthErrorMessage, useAdminSession } from "@/lib/firebase/admin-session";
+import { useAdminTheme } from "../use-admin-theme";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const session = useAdminSession();
+  const { theme } = useAdminTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -84,14 +86,14 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="admin-login">
+    <main className="admin-login" data-theme={theme}>
       <section className="admin-login-visual">
         <Link href="/" className="admin-login-kicker">
           Kitari Studio admin
         </Link>
         <p>Manage every project, package, and inquiry in one place.</p>
         <h2>
-          Kitari Studio<sup>©</sup>
+          kitari<small>studio.</small>
         </h2>
       </section>
       <section className="admin-login-form-panel">
