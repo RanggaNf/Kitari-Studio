@@ -13,40 +13,38 @@ interface WorldMapHeatmapProps {
   countries: CountryStat[];
 }
 
-// Country centroid coordinates on an 1000x500 equirectangular SVG map
-// x: (lon + 180) * (1000 / 360) = (lon + 180) * 2.777
-// y: (90 - lat) * (500 / 180) = (90 - lat) * 2.777
-const COUNTRY_COORDS: Record<string, { x: number; y: number; r: number; flag: string; name: string }> = {
-  US: { x: 260, y: 145, r: 42, flag: "🇺🇸", name: "United States" },
-  CA: { x: 250, y: 85, r: 38, flag: "🇨🇦", name: "Canada" },
-  MX: { x: 220, y: 195, r: 20, flag: "🇲🇽", name: "Mexico" },
-  BR: { x: 350, y: 320, r: 35, flag: "🇧🇷", name: "Brazil" },
-  AR: { x: 325, y: 390, r: 22, flag: "🇦🇷", name: "Argentina" },
-  GB: { x: 495, y: 105, r: 16, flag: "🇬🇧", name: "United Kingdom" },
-  FR: { x: 505, y: 125, r: 18, flag: "🇫🇷", name: "France" },
-  DE: { x: 525, y: 110, r: 18, flag: "🇩🇪", name: "Germany" },
-  IT: { x: 535, y: 135, r: 16, flag: "🇮🇹", name: "Italy" },
-  ES: { x: 490, y: 140, r: 18, flag: "🇪🇸", name: "Spain" },
-  NL: { x: 512, y: 106, r: 14, flag: "🇳🇱", name: "Netherlands" },
-  PL: { x: 550, y: 105, r: 18, flag: "🇵🇱", name: "Poland" },
-  UA: { x: 585, y: 115, r: 20, flag: "🇺🇦", name: "Ukraine" },
-  RU: { x: 720, y: 85, r: 55, flag: "🇷🇺", name: "Russia" },
-  TR: { x: 595, y: 145, r: 18, flag: "🇹🇷", name: "Turkey" },
-  IR: { x: 645, y: 165, r: 22, flag: "🇮🇷", name: "Iran" },
-  SA: { x: 625, y: 195, r: 22, flag: "🇸🇦", name: "Saudi Arabia" },
-  AE: { x: 650, y: 190, r: 12, flag: "🇦🇪", name: "United Arab Emirates" },
-  IN: { x: 715, y: 205, r: 32, flag: "🇮🇳", name: "India" },
-  CN: { x: 785, y: 165, r: 48, flag: "🇨🇳", name: "China" },
-  JP: { x: 885, y: 155, r: 20, flag: "🇯🇵", name: "Japan" },
-  KR: { x: 850, y: 155, r: 14, flag: "🇰🇷", name: "South Korea" },
-  SG: { x: 788, y: 248, r: 10, flag: "🇸🇬", name: "Singapore" },
-  MY: { x: 785, y: 242, r: 16, flag: "🇲🇾", name: "Malaysia" },
-  ID: { x: 825, y: 275, r: 35, flag: "🇮🇩", name: "Indonesia" },
-  AU: { x: 870, y: 355, r: 38, flag: "🇦🇺", name: "Australia" },
-  NZ: { x: 960, y: 405, r: 16, flag: "🇳🇿", name: "New Zealand" },
-  ZA: { x: 565, y: 365, r: 22, flag: "🇿🇦", name: "South Africa" },
-  NG: { x: 520, y: 235, r: 18, flag: "🇳🇬", name: "Nigeria" },
-  EG: { x: 580, y: 175, r: 18, flag: "🇪🇬", name: "Egypt" },
+// Country centroid coordinates on a 1000x500 equirectangular SVG map
+const COUNTRY_COORDS: Record<string, { x: number; y: number; r: number; name: string }> = {
+  US: { x: 260, y: 145, r: 42, name: "United States" },
+  CA: { x: 250, y: 85, r: 38, name: "Canada" },
+  MX: { x: 220, y: 195, r: 20, name: "Mexico" },
+  BR: { x: 350, y: 320, r: 35, name: "Brazil" },
+  AR: { x: 325, y: 390, r: 22, name: "Argentina" },
+  GB: { x: 495, y: 105, r: 16, name: "United Kingdom" },
+  FR: { x: 505, y: 125, r: 18, name: "France" },
+  DE: { x: 525, y: 110, r: 18, name: "Germany" },
+  IT: { x: 535, y: 135, r: 16, name: "Italy" },
+  ES: { x: 490, y: 140, r: 18, name: "Spain" },
+  NL: { x: 512, y: 106, r: 14, name: "Netherlands" },
+  PL: { x: 550, y: 105, r: 18, name: "Poland" },
+  UA: { x: 585, y: 115, r: 20, name: "Ukraine" },
+  RU: { x: 720, y: 85, r: 55, name: "Russia" },
+  TR: { x: 595, y: 145, r: 18, name: "Turkey" },
+  IR: { x: 645, y: 165, r: 22, name: "Iran" },
+  SA: { x: 625, y: 195, r: 22, name: "Saudi Arabia" },
+  AE: { x: 650, y: 190, r: 12, name: "United Arab Emirates" },
+  IN: { x: 715, y: 205, r: 32, name: "India" },
+  CN: { x: 785, y: 165, r: 48, name: "China" },
+  JP: { x: 885, y: 155, r: 20, name: "Japan" },
+  KR: { x: 850, y: 155, r: 14, name: "South Korea" },
+  SG: { x: 788, y: 248, r: 10, name: "Singapore" },
+  MY: { x: 785, y: 242, r: 16, name: "Malaysia" },
+  ID: { x: 825, y: 275, r: 35, name: "Indonesia" },
+  AU: { x: 870, y: 355, r: 38, name: "Australia" },
+  NZ: { x: 960, y: 405, r: 16, name: "New Zealand" },
+  ZA: { x: 565, y: 365, r: 22, name: "South Africa" },
+  NG: { x: 520, y: 235, r: 18, name: "Nigeria" },
+  EG: { x: 580, y: 175, r: 18, name: "Egypt" },
 };
 
 // Simplified SVG silhouette paths for the world continents
@@ -218,7 +216,7 @@ export function WorldMapHeatmap({ countries }: WorldMapHeatmapProps) {
                       style={{ transition: "all 0.2s ease" }}
                     />
 
-                    {/* ISO Label or Flag inside major nodes */}
+                    {/* ISO Label inside major nodes */}
                     {hasUsers && (
                       <text
                         x={coord.x}
@@ -251,8 +249,8 @@ export function WorldMapHeatmap({ countries }: WorldMapHeatmapProps) {
               }}
             >
               <div className="admin-tooltip-title">
-                <span>
-                  {COUNTRY_COORDS[hoveredCountry.countryId || ""]?.flag || "🌐"}
+                <span className="admin-country-code-pill">
+                  {hoveredCountry.countryId || "INT"}
                 </span>
                 <strong>{hoveredCountry.country}</strong>
               </div>
@@ -293,8 +291,7 @@ export function WorldMapHeatmap({ countries }: WorldMapHeatmapProps) {
               const pct = totalUsers > 0 ? (c.users / totalUsers) * 100 : 0;
               const isHovered =
                 hoveredCountry && hoveredCountry.country === c.country;
-              const flag =
-                COUNTRY_COORDS[c.countryId?.toUpperCase() || ""]?.flag || "🌐";
+              const code = c.countryId?.toUpperCase() || "INT";
 
               return (
                 <div
@@ -304,7 +301,7 @@ export function WorldMapHeatmap({ countries }: WorldMapHeatmapProps) {
                   onMouseLeave={() => setHoveredCountry(null)}
                 >
                   <div className="admin-geo-item-name">
-                    <span className="admin-country-flag">{flag}</span>
+                    <span className="admin-country-code-pill">{code}</span>
                     <span className="admin-country-label">{c.country}</span>
                   </div>
 

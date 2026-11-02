@@ -1147,7 +1147,7 @@ export default function AdminPage() {
                     style={{ fontSize: "12px", padding: "6px 14px", borderRadius: "99px" }}
                     onClick={() => void loadSection()}
                   >
-                    🔄 Refresh Data
+                    Refresh Data
                   </button>
                   <span className="admin-analytics-period">28 hari terakhir</span>
                 </div>
@@ -1230,7 +1230,7 @@ export default function AdminPage() {
                 ))}
               </div>
 
-              {/* 🌍 Peta Dunia Heatmap ala Google Analytics */}
+              {/* Peta Dunia Heatmap ala Google Analytics */}
               <WorldMapHeatmap countries={analyticsData?.countries || []} />
 
               {/* 2 Kolom: Saluran Akuisisi & Perangkat */}
@@ -1300,12 +1300,6 @@ export default function AdminPage() {
                       const totalDevUsers =
                         analyticsData?.devices?.reduce((acc, cur) => acc + cur.users, 0) || 104;
                       const pct = totalDevUsers > 0 ? Math.round((d.users / totalDevUsers) * 100) : 0;
-                      const icon =
-                        d.category === "mobile"
-                          ? "📱"
-                          : d.category === "tablet"
-                            ? "📟"
-                            : "💻";
                       const label =
                         d.category === "mobile"
                           ? "Mobile"
@@ -1315,7 +1309,25 @@ export default function AdminPage() {
 
                       return (
                         <div key={d.category} className="admin-device-item">
-                          <span style={{ fontSize: "22px" }}>{icon}</span>
+                          <span style={{ display: "inline-flex", color: "var(--mu)" }}>
+                            {d.category === "mobile" ? (
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                                <line x1="12" y1="18" x2="12.01" y2="18" />
+                              </svg>
+                            ) : d.category === "tablet" ? (
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="4" y="2" width="16" height="20" rx="2" />
+                                <line x1="12" y1="18" x2="12.01" y2="18" />
+                              </svg>
+                            ) : (
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2" />
+                                <line x1="8" y1="21" x2="16" y2="21" />
+                                <line x1="12" y1="17" x2="12" y2="21" />
+                              </svg>
+                            )}
+                          </span>
                           <strong>{d.users}</strong>
                           <span style={{ fontWeight: 600, color: "var(--tx)" }}>{label}</span>
                           <span>{pct}% share</span>
