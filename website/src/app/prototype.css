@@ -1390,13 +1390,14 @@ html {
   gap: 20px;
   padding: 32px var(--pad);
 }
-.prototype-page .portfolio-content,
-.prototype-page .project-detail {
-  width: min(calc(100% - var(--pad) - var(--pad)), 1320px);
+.prototype-page .portfolio-content {
+  width: min(calc(100% - var(--pad) - var(--pad)), 1400px);
   margin: clamp(56px, 7vw, 100px) auto 0;
 }
 .prototype-page .project-detail {
-  max-width: 1000px;
+  width: min(calc(100% - var(--pad) - var(--pad)), 1480px);
+  max-width: 1480px;
+  margin: clamp(48px, 6vw, 88px) auto 0;
 }
 .prototype-page .project-detail-title-skeleton {
   width: min(58vw, 560px);
@@ -1409,7 +1410,7 @@ html {
   border-radius: 999px;
 }
 .prototype-page .project-detail-cover-skeleton {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   border-radius: 12px;
 }
 .prototype-page .project-detail-inquiry-skeleton {
@@ -1622,7 +1623,7 @@ html {
   margin-bottom: 40px;
 }
 .prototype-page .project-detail-heading > div {
-  max-width: 640px;
+  max-width: 840px;
 }
 .prototype-page .project-detail-heading h1 {
   margin: 0;
@@ -1655,7 +1656,7 @@ html {
 }
 .prototype-page .project-detail-cover > img {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   object-fit: cover;
 }
 .prototype-page .project-detail-meta {
@@ -2423,7 +2424,7 @@ html {
     margin-bottom: 28px;
   }
   .prototype-page .project-detail-cover > img {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 10;
   }
   .prototype-page .project-detail-meta {
     gap: 14px 20px;
