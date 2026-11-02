@@ -1839,6 +1839,313 @@
   text-align: center;
 }
 
+/* GA4 Complete Analytics & World Map Heatmap */
+.admin-analytics-grid-2 {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .admin-analytics-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-geo-card {
+  background: var(--sol);
+  border: 1px solid var(--bd);
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-geo-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-geo-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.admin-geo-header p {
+  color: var(--mu);
+  font-size: 13px;
+  margin: 0;
+}
+
+.admin-geo-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--mu);
+}
+
+.admin-geo-bar {
+  width: 80px;
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.4), #1d4ed8);
+}
+
+.admin-geo-content {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 20px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .admin-geo-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-map-container {
+  position: relative;
+  background: color-mix(in srgb, var(--bd) 25%, transparent);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.admin-world-svg {
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+}
+
+.admin-continent-path {
+  fill: var(--bd);
+  opacity: 0.35;
+  stroke: var(--bd);
+  stroke-width: 0.5;
+}
+
+.admin-map-tooltip {
+  pointer-events: none;
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.admin-tooltip-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.admin-tooltip-body {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-tooltip-body > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-tooltip-body span {
+  color: #94a3b8;
+}
+
+.admin-geo-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-geo-list-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--mu);
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.admin-geo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.admin-geo-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+
+.admin-geo-item:hover,
+.admin-geo-item.active {
+  background: color-mix(in srgb, #2a8bf2 12%, transparent);
+}
+
+.admin-geo-item-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.admin-country-flag {
+  font-size: 15px;
+}
+
+.admin-geo-item-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.admin-geo-share {
+  color: var(--mu);
+  font-size: 12px;
+  min-width: 32px;
+  text-align: right;
+}
+
+.admin-geo-bar-track {
+  position: absolute;
+  bottom: 0;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: transparent;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.admin-geo-bar-fill {
+  height: 100%;
+  background: #2a8bf2;
+  border-radius: 99px;
+  opacity: 0.7;
+}
+
+/* Channels & Devices cards */
+.admin-sub-card {
+  background: var(--sol);
+  border: 1px solid var(--bd);
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-sub-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.admin-channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-channel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-channel-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.admin-channel-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--bd) 40%, transparent);
+  overflow: hidden;
+}
+
+.admin-channel-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #2a8bf2, #38bdf8);
+}
+
+.admin-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.admin-device-item {
+  border: 1px solid var(--bd);
+  border-radius: 16px;
+  padding: 16px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-device-item strong {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.admin-device-item span {
+  font-size: 12px;
+  color: var(--mu);
+}
+
+/* Daily trend sparkline / chart in analytics */
+.admin-trend-chart-card {
+  background: var(--sol);
+  border: 1px solid var(--bd);
+  border-radius: 24px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-trend-svg {
+  width: 100%;
+  height: 100px;
+  overflow: visible;
+}
+
 .admin-appearance-preview {
   display: grid;
   gap: 10px;

@@ -52,6 +52,7 @@ async function run() {
     metrics: [
       { name: "activeUsers" },
       { name: "screenPageViews" },
+      { name: "sessions" },
       { name: "userEngagementDuration" },
     ],
   });
@@ -59,18 +60,35 @@ async function run() {
   const row = overview.rows?.[0];
   const activeVisitors = Number(row?.metricValues?.[0]?.value ?? 0);
   const pageViews = Number(row?.metricValues?.[1]?.value ?? 0);
-  const totalEngagement = Number(row?.metricValues?.[2]?.value ?? 0);
+  const sessions = Number(row?.metricValues?.[2]?.value ?? 0);
+  const totalEngagement = Number(row?.metricValues?.[3]?.value ?? 0);
   const avgEngagementSec = activeVisitors > 0 ? totalEngagement / activeVisitors : 0;
 
-  console.log(`Active visitors: ${activeVisitors}`);
-  console.log(`Page views: ${pageViews}`);
+  console.log(`Active visitors (28d): ${activeVisitors}`);
+  console.log(`Page views (28d): ${pageViews}`);
+  console.log(`Sessions (28d): ${sessions}`);
   console.log(`Avg engagement: ${formatDuration(avgEngagementSec)}`);
 
-  // 2. Top pages breakdown
+  // 2. Daily trend (last 28 days)
+  const [trendReport] = await analyticsClient.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+    dimensions: [{ name: "date" }],
+    metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
+    orderBys: [{ dimension: { dimensionName: "date" } }],
+  });
+
+  const dailyTrend = (trendReport.rows ?? []).map((tRow) => ({
+    date: tRow.dimensionValues?.[0]?.value ?? "",
+    users: Number(tRow.metricValues?.[0]?.value ?? 0),
+    views: Number(tRow.metricValues?.[1]?.value ?? 0),
+  }));
+
+  // 3. Top pages breakdown (with pageTitle)
   const [pagesReport] = await analyticsClient.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
-    dimensions: [{ name: "pagePath" }],
+    dimensions: [{ name: "pagePath" }, { name: "pageTitle" }],
     metrics: [
       { name: "activeUsers" },
       { name: "screenPageViews" },
@@ -87,52 +105,93 @@ async function run() {
 
   const pages = (pagesReport.rows ?? []).map((pRow) => {
     const path = pRow.dimensionValues?.[0]?.value ?? "/";
+    const title = pRow.dimensionValues?.[1]?.value ?? path;
     const visitors = Number(pRow.metricValues?.[0]?.value ?? 0);
     const views = Number(pRow.metricValues?.[1]?.value ?? 0);
     const engSec = Number(pRow.metricValues?.[2]?.value ?? 0);
     const avgSec = visitors > 0 ? engSec / visitors : 0;
     return {
       path,
+      title,
       visitors,
       pageViews: views,
       avgEngagement: formatDuration(avgSec),
     };
   });
 
-  console.log(`Found ${pages.length} page paths.`);
-
-  // 3. Country breakdown (optional bonus info)
+  // 4. Country breakdown (with country and countryId)
   const [countryReport] = await analyticsClient.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
-    dimensions: [{ name: "country" }],
-    metrics: [{ name: "activeUsers" }],
+    dimensions: [{ name: "country" }, { name: "countryId" }],
+    metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }],
     orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
-    limit: 10,
+    limit: 25,
   });
 
   const countries = (countryReport.rows ?? []).map((cRow) => ({
     country: cRow.dimensionValues?.[0]?.value ?? "Unknown",
+    countryId: (cRow.dimensionValues?.[1]?.value ?? "").toUpperCase(),
     users: Number(cRow.metricValues?.[0]?.value ?? 0),
+    views: Number(cRow.metricValues?.[1]?.value ?? 0),
   }));
+
+  console.log("Top countries:", countries.slice(0, 5));
+
+  // 5. Acquisition Channels (Traffic Sources)
+  const [channelReport] = await analyticsClient.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+    dimensions: [{ name: "sessionDefaultChannelGroup" }],
+    metrics: [{ name: "sessions" }, { name: "activeUsers" }],
+    orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+  });
+
+  const channels = (channelReport.rows ?? []).map((chRow) => ({
+    channel: chRow.dimensionValues?.[0]?.value ?? "Direct",
+    sessions: Number(chRow.metricValues?.[0]?.value ?? 0),
+    users: Number(chRow.metricValues?.[1]?.value ?? 0),
+  }));
+
+  console.log("Traffic channels:", channels);
+
+  // 6. Device Categories (Desktop, Mobile, Tablet)
+  const [deviceReport] = await analyticsClient.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+    dimensions: [{ name: "deviceCategory" }],
+    metrics: [{ name: "activeUsers" }],
+    orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+  });
+
+  const devices = (deviceReport.rows ?? []).map((dRow) => ({
+    category: dRow.dimensionValues?.[0]?.value ?? "desktop",
+    users: Number(dRow.metricValues?.[0]?.value ?? 0),
+  }));
+
+  console.log("Devices:", devices);
 
   const payload = {
     connected: true,
     propertyId,
     activeVisitors,
     pageViews,
+    sessions,
     avgEngagement: formatDuration(avgEngagementSec),
+    dailyTrend,
     pages,
     countries,
+    channels,
+    devices,
     updatedAt: new Date().toISOString(),
   };
 
-  console.log("Saving to Firestore siteSettings/analytics...");
+  console.log("Saving expanded GA4 analytics to Firestore siteSettings/analytics...");
   await db.collection("siteSettings").doc("analytics").set(payload, { merge: true });
-  console.log("Successfully synced analytics data to Firestore!");
+  console.log("Successfully synced comprehensive GA4 data to Firestore!");
 }
 
 run().catch((err) => {
-  console.error("Error syncing GA4 analytics:", err);
+  console.error("Error syncing expanded GA4 analytics:", err);
   process.exit(1);
 });

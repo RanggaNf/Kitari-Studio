@@ -242,15 +242,33 @@ export interface AnalyticsData {
   propertyId?: string;
   activeVisitors?: number;
   pageViews?: number;
+  sessions?: number;
   avgEngagement?: string;
+  dailyTrend?: Array<{
+    date: string;
+    users: number;
+    views: number;
+  }>;
   pages?: Array<{
     path: string;
+    title?: string;
     visitors: number;
     pageViews: number;
     avgEngagement: string;
   }>;
   countries?: Array<{
     country: string;
+    countryId?: string;
+    users: number;
+    views?: number;
+  }>;
+  channels?: Array<{
+    channel: string;
+    sessions: number;
+    users: number;
+  }>;
+  devices?: Array<{
+    category: string;
     users: number;
   }>;
   updatedAt?: string;
