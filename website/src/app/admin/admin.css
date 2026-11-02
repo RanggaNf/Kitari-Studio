@@ -128,6 +128,7 @@
   flex-direction: column;
   border-right: 1px solid var(--bd);
   background: var(--sol);
+  overflow: hidden;
 }
 
 .admin-sidebar-brand {
@@ -174,9 +175,17 @@
   align-content: start;
   gap: 18px;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   padding: 14px 12px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.admin-sidebar-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .admin-nav-label {
@@ -238,7 +247,7 @@
   position: absolute;
   top: 9px;
   bottom: 9px;
-  left: -12px;
+  left: 0;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: var(--ac);
@@ -444,46 +453,82 @@
 /* ---------- Tablet (641–1024px): slim icon rail ---------- */
 @media (min-width: 641px) and (max-width: 1024px) {
   .admin-shell {
-    --sidebar-w: 72px;
+    --sidebar-w: 58px;
+    --topbar-h: 56px;
+  }
+
+  .admin-sidebar {
+    width: var(--sidebar-w);
+    overflow: hidden !important;
   }
 
   .admin-sidebar-brand {
     justify-content: center;
     padding: 0;
+    height: var(--topbar-h);
   }
 
   .admin-brand-text,
   .admin-nav-label,
   .admin-user-meta {
-    display: none;
+    display: none !important;
   }
 
   .admin-sidebar-nav {
-    gap: 10px;
-    padding: 12px;
+    gap: 4px;
+    padding: 8px 4px;
+    overflow-x: hidden !important;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .admin-sidebar-nav::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .admin-nav-group {
+    display: grid;
+    justify-items: center;
+    width: 100%;
   }
 
   .admin-nav-group + .admin-nav-group {
     border-top: 1px solid var(--bd);
-    padding-top: 10px;
+    padding-top: 5px;
+    margin-top: 3px;
   }
 
   .admin-nav-list {
     justify-items: center;
+    gap: 2px;
+    width: 100%;
   }
 
   .admin-nav-item {
-    width: 44px;
-    min-height: 44px;
+    width: 38px;
+    min-height: 34px;
+    height: 34px;
     justify-content: center;
+    align-items: center;
     gap: 0;
     padding: 0;
+    border-radius: 8px;
+  }
+
+  .admin-nav-item svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .admin-nav-item[aria-current="page"] {
+    background: var(--as);
+    color: var(--tx);
   }
 
   .admin-nav-item[aria-current="page"]::before {
-    top: 11px;
-    bottom: 11px;
-    left: -12px;
+    display: none !important;
   }
 
   /* label stays in the DOM for screen readers, hidden visually */
@@ -499,11 +544,11 @@
   /* rail: the counter collapses into a dot (exact number is in aria-label) */
   .admin-nav-badge {
     position: absolute;
-    top: 7px;
-    right: 7px;
-    width: 9px;
+    top: 4px;
+    right: 4px;
+    width: 7px;
     min-width: 0;
-    height: 9px;
+    height: 7px;
     margin: 0;
     padding: 0;
     font-size: 0;
@@ -513,12 +558,26 @@
 
   .admin-sidebar-footer {
     flex-direction: column;
-    gap: 10px;
-    padding: 12px 0;
+    gap: 6px;
+    padding: 8px 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+  }
+
+  .admin-sidebar-footer .admin-icon-button {
+    width: 32px;
+    height: 32px;
   }
 
   .admin-user {
     flex: none;
+    justify-content: center;
   }
 }
 
